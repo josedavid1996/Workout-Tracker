@@ -1,0 +1,32 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Roboto:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import 'tailwindcss';
+
+/* Design tokens taken directly from the real Figma file (node 16:2187 and
+   siblings), which supersedes the earlier text-only brief (brass/gold +
+   Barlow Condensed + Inter) once actually compared against the design.
+   Tailwind v4 is CSS-first — no tailwind.config.js. Defining these as
+   `--color-*` / `--font-*` variables here generates the matching utilities
+   (e.g. `bg-surface`, `text-accent`, `font-display`). */
+@theme {
+  --color-background: #0f172a;
+  --color-surface: #1e293b;
+  --color-surface-2: #32343d;
+  --color-border: #334155;
+  --color-foreground: #e1e2ed;
+  --color-muted: #94a3b8;
+  --color-accent: #2563eb;
+  --color-positive: #5fa777;
+  --color-data: #b4c5ff;
+
+  --font-display: 'Poppins', ui-sans-serif, sans-serif;
+  --font-sans: 'Roboto', ui-sans-serif, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+  }
+}
