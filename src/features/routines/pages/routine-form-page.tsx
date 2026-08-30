@@ -8,6 +8,7 @@ import iconRemove from '../../../assets/icons/icon-remove.svg'
 import iconRetry from '../../../assets/icons/icon-retry.svg'
 import iconWarning from '../../../assets/icons/icon-warning.svg'
 import { cx } from '../../../shared/lib/cx'
+import { generateId } from '../../../shared/lib/generate-id'
 import { BottomNav } from '../../../shared/ui/bottom-nav'
 import { Button } from '../../../shared/ui/button'
 import { DashedButton } from '../../../shared/ui/dashed-button'
@@ -24,7 +25,7 @@ import { moveDraft } from '../lib/move-draft'
 type ExerciseDraft = RoutineExerciseDraft & { key: string }
 
 function toDraft(exercise: RoutineExerciseDraft): ExerciseDraft {
-  return { ...exercise, key: crypto.randomUUID() }
+  return { ...exercise, key: generateId() }
 }
 
 // Shared create/edit form (`/routines/new` and `/routines/:id/edit`), styled

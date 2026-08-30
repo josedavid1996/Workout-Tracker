@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { useEffect } from 'react'
+import iconClose from '../../assets/icons/icon-close.svg'
 
 interface SheetProps {
   open: boolean
@@ -9,8 +10,12 @@ interface SheetProps {
 }
 
 // Mobile-first bottom sheet: slides up from the bottom of the viewport,
-// dismissible via backdrop click or Escape. Intentionally not a portal —
-// kept simple and rendered inline by the page that owns it.
+// dismissible via backdrop click, Escape, or the header close button.
+// `max-h-[85dvh] overflow-y-auto` on the panel keeps tall content (e.g. a
+// Quick Reference sheet's gif + instructions) from growing past the
+// viewport — without it, the panel could push its own dismiss affordances
+// off-screen with nothing left on-screen to tap. Intentionally not a
+// portal — kept simple and rendered inline by the page that owns it.
 export function Sheet({ open, onClose, title, children }: SheetProps) {
   useEffect(() => {
     if (!open) return
@@ -33,10 +38,22 @@ export function Sheet({ open, onClose, title, children }: SheetProps) {
         className="absolute inset-0 bg-black/60"
         onClick={onClose}
       />
-      <div className="relative z-10 w-full max-w-md rounded-t-2xl border-t border-border bg-surface p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-        {title && (
-          <h2 className="mb-3 font-display text-lg uppercase tracking-wide text-foreground">{title}</h2>
-        )}
+      <div className="thin-scrollbar relative z-10 flex max-h-[85dvh] w-full max-w-md flex-col overflow-y-auto rounded-t-2xl border-t border-border bg-surface p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          {title ? (
+            <h2 className="font-display text-lg uppercase tracking-wide text-foreground">{title}</h2>
+          ) : (
+            <span />
+          )}
+          <button
+            type="button"
+            aria-label="Cerrar"
+            onClick={onClose}
+            className="shrink-0 rounded-full p-1.5 text-muted hover:bg-surface-2 hover:text-foreground"
+          >
+            <img src={iconClose} alt="" className="h-4 w-4" />
+          </button>
+        </div>
         {children}
       </div>
     </div>

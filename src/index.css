@@ -30,3 +30,28 @@
     font-family: var(--font-sans);
   }
 }
+
+/* Slim, on-brand scrollbar for scrollable panels (e.g. `Sheet`) — without
+   it, a tall bottom sheet falls back to the OS/browser's default
+   scrollbar, which is wide and clashes with the dark theme. */
+@utility thin-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background-color: var(--color-border);
+    border-radius: 9999px;
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-muted);
+  }
+}
