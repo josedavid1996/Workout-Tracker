@@ -117,7 +117,7 @@ export function RoutinesListPage() {
             <Link
               to="/routines/new"
               aria-label="Nueva rutina"
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-background"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-white"
             >
               <img src={iconPlus} alt="" className="h-4 w-4" />
             </Link>

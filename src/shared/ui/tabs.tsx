@@ -29,7 +29,7 @@ export function Tabs({ tabs, value, onChange, children }: TabsProps) {
             onClick={() => onChange(tab.id)}
             className={cx(
               'flex-1 rounded-md px-3 py-1.5 font-display text-sm uppercase tracking-wide transition-colors',
-              tab.id === value ? 'bg-accent text-background' : 'text-muted hover:text-foreground',
+              tab.id === value ? 'bg-accent text-white' : 'text-muted hover:text-foreground',
             )}
           >
             {tab.label}

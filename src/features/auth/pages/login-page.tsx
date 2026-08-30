@@ -13,10 +13,14 @@ const modeTabs = [
   { id: 'signup', label: 'Crear cuenta' },
 ]
 
-// Single form with a login/signup toggle. Signup on this instance always
-// requires email confirmation (mailer_autoconfirm is off), so a successful
-// signUp never logs the user in directly — it shows a "check your email"
-// message instead of navigating away.
+// Single form with a login/signup toggle. Whether signup requires a separate
+// email-confirmation step depends on this Supabase instance's
+// `mailer_autoconfirm` setting, which this page does not assume either way
+// (a live audit found this instance actually has it `true`, so the old
+// unconditional "check your email" message was simply wrong): a successful
+// `signUp()` call already tells us which case applies — Supabase returns a
+// real `session` when autoconfirm is on, and `null` when it isn't — so the
+// page branches on that real value instead of a hardcoded assumption.
 export function LoginPage() {
   const navigate = useNavigate()
   const [mode, setMode] = useState<Mode>('login')
@@ -49,8 +53,16 @@ export function LoginPage() {
       }
 
       const result = await signUp(email, password)
-      if (result.error) {
+      if (result.error !== null) {
         setError(result.error)
+        return
+      }
+      if (result.data.session) {
+        // `mailer_autoconfirm` is on for this instance — signUp already
+        // returned an active session, so there is no confirmation step to
+        // wait for. Log the user in directly instead of showing a message
+        // that promises a step that never happens.
+        navigate('/')
         return
       }
       setSignupSuccess(true)

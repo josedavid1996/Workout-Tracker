@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../api/auth', () => ({
@@ -49,6 +49,34 @@ describe('LoginPage', () => {
 
     await waitFor(() => expect(signUp).toHaveBeenCalledWith('new@b.com', 'password123'))
     expect(await screen.findByText(/revisá tu email/i)).toBeInTheDocument()
+  })
+
+  // PR12 (live audit fix): this instance actually has `mailer_autoconfirm:
+  // true`, so a real signUp call returns an active session immediately —
+  // the old unconditional "revisá tu email" message promised a
+  // confirmation step that never existed on this instance. The fix branches
+  // on the real `session` Supabase already returns, instead of assuming a
+  // fixed instance configuration.
+  it('navigates straight in when signup already returns an active session (mailer_autoconfirm on)', async () => {
+    vi.mocked(signUp).mockResolvedValue({ data: { user: {}, session: {} } as never, error: null })
+
+    render(
+      <MemoryRouter initialEntries={['/login']}>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/" element={<p>Home</p>} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    fireEvent.click(screen.getByRole('tab', { name: /crear cuenta/i }))
+    fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'new@b.com' } })
+    fireEvent.change(screen.getByLabelText(/contraseña/i), { target: { value: 'password123' } })
+    fireEvent.click(screen.getByRole('button', { name: /crear cuenta/i }))
+
+    await waitFor(() => expect(signUp).toHaveBeenCalledWith('new@b.com', 'password123'))
+    expect(await screen.findByText('Home')).toBeInTheDocument()
+    expect(screen.queryByText(/revisá tu email/i)).not.toBeInTheDocument()
   })
 
   it('shows a readable error message when login fails', async () => {

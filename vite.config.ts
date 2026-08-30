@@ -6,6 +6,13 @@ import { defineConfig } from 'vite'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  server: {
+    // Allow reaching the dev server from other devices on the LAN (phone
+    // testing) — Vite's Host-header check otherwise resets connections
+    // that arrive as `Host: <lan-ip>` instead of `localhost`.
+    host: true,
+    allowedHosts: true,
+  },
   test: {
     environment: 'jsdom',
     globals: true,

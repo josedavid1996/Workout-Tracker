@@ -50,3 +50,26 @@ export function computeMonthHeatmap(
     }
   })
 }
+
+// Kept separate from `computeMonthHeatmap` (whose existing tests index
+// cells by `day - 1`, so changing its return shape would break them) — this
+// is purely a presentation-layer concern for a 7-column calendar-style grid.
+// Without this, `history-page.tsx` rendered `computeMonthHeatmap`'s cells
+// directly in day order with no offset for the 1st's real weekday, so the
+// grid never aligned to weekday columns and the last row simply stopped
+// wherever `daysInMonth % 7` landed — reading as an incomplete/cut-off row.
+// Adds `null` placeholder cells (rendered as empty, non-interactive spacers)
+// at both ends so the grid is always a whole number of real 7-day weeks.
+export function padHeatmapWeeks(cells: HeatmapDay[], year: number, month: number): (HeatmapDay | null)[] {
+  // 0 = Sunday, matching `Date#getDay()` and this app's `WEEKDAY_LABELS`
+  // (`history-page.tsx`) column order.
+  const leadingCount = new Date(year, month - 1, 1).getDay()
+  const totalBeforeTrailing = leadingCount + cells.length
+  const trailingCount = (7 - (totalBeforeTrailing % 7)) % 7
+
+  return [
+    ...Array.from({ length: leadingCount }, () => null),
+    ...cells,
+    ...Array.from({ length: trailingCount }, () => null),
+  ]
+}

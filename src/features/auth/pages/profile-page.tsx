@@ -73,7 +73,7 @@ export function ProfilePage() {
             {initials(displayName)}
           </div>
 
-          <div className="flex flex-1 flex-col gap-1">
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
             {isEditing ? (
               <div className="flex flex-col gap-2">
                 <Input
@@ -93,21 +93,27 @@ export function ProfilePage() {
                 </div>
               </div>
             ) : (
+              // `min-w-0` + `truncate` on the name (instead of letting it wrap
+              // freely) — at narrow widths (320px) a long uppercase
+              // tracking-wide name would otherwise wrap to 2 lines and, since
+              // this row is `items-center`, vertically re-center and overlap
+              // the edit-icon button next to it. The button is `shrink-0` so
+              // it always keeps its own fixed slot.
               <div className="flex items-center gap-2">
-                <span className="font-display text-lg font-extrabold uppercase tracking-wide text-foreground">
+                <span className="min-w-0 truncate font-display text-lg font-extrabold uppercase tracking-wide text-foreground">
                   {displayName}
                 </span>
                 <button
                   type="button"
                   onClick={startEditing}
                   aria-label="Editar nombre"
-                  className="flex h-6 w-6 items-center justify-center rounded-full text-muted hover:text-foreground"
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-muted hover:text-foreground"
                 >
                   <img src={iconEdit} alt="" className="h-4 w-4" />
                 </button>
               </div>
             )}
-            <span className="font-mono text-xs text-muted">{session?.user.email ?? ''}</span>
+            <span className="truncate font-mono text-xs text-muted">{session?.user.email ?? ''}</span>
           </div>
         </div>
 

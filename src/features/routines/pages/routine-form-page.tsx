@@ -152,6 +152,13 @@ export function RoutineFormPage() {
 
   return (
     <div className="min-h-dvh bg-background pb-28">
+      {/* Only one "Guardar" affordance for this whole page — the full-width
+          "Guardar rutina" button below the form is the single save action
+          (consistent with the rest of the app's screens). This header
+          previously had its own "Guardar" text button doing the exact same
+          thing, so both were visible and tappable at once. The empty
+          `h-9 w-9` span keeps the title visually centered against the
+          "Volver" button on the other side, same slot size as `IconButton`. */}
       <header className="flex items-center justify-between border-b border-border px-4 py-3">
         <IconButton aria-label="Volver" onClick={() => navigate(-1)}>
           <img src={iconBack} alt="" className="h-4 w-4" />
@@ -159,15 +166,7 @@ export function RoutineFormPage() {
         <h1 className="font-display text-lg font-bold uppercase tracking-wide text-foreground">
           {isEditing ? 'Editar rutina' : 'Nueva rutina'}
         </h1>
-        <Button
-          type="button"
-          variant="text"
-          onClick={() => handleSubmit()}
-          disabled={isSaving}
-          className={cx('font-display text-sm uppercase tracking-wide', error ? 'text-muted' : 'text-data')}
-        >
-          Guardar
-        </Button>
+        <span aria-hidden="true" className="h-9 w-9" />
       </header>
 
       <form className="mx-auto flex max-w-md flex-col gap-4 px-4 py-4" onSubmit={handleSubmit}>

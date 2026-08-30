@@ -11,7 +11,7 @@ import { useActiveWorkoutQuery } from '../../workout-session/api/use-workout-ses
 import { useWorkoutHistoryQuery } from '../api/use-history'
 import type { WorkoutHistoryItem } from '../api/history'
 import type { HeatmapDay } from '../lib/heatmap'
-import { computeMonthHeatmap } from '../lib/heatmap'
+import { computeMonthHeatmap, padHeatmapWeeks } from '../lib/heatmap'
 
 // `null` = "Todas" (no filter), `'freestyle'` = only workouts with no
 // routine, otherwise an actual routine id.
@@ -71,6 +71,10 @@ export function HistoryPage() {
   const workoutDates = items.map((item) => item.createdAt)
   const heatmapCells: HeatmapDay[] = computeMonthHeatmap(workoutDates, year, month)
   const sessionsThisMonth = heatmapCells.reduce((sum, cell) => sum + cell.sessionsCount, 0)
+  // Presentation-only concern (see `heatmap.ts#padHeatmapWeeks`'s comment):
+  // aligns day 1 to its real weekday column and completes the last row to a
+  // full week, instead of `heatmapCells` rendered raw in day order.
+  const paddedHeatmapCells = padHeatmapWeeks(heatmapCells, year, month)
 
   const weekStart = startOfWeek(now)
   const thisWeekItems = items.filter((item) => isSameOrAfter(new Date(item.createdAt), weekStart))
@@ -110,7 +114,7 @@ export function HistoryPage() {
               monthLabel={MONTH_NAMES[month - 1]}
               year={year}
               sessionsCount={sessionsThisMonth}
-              cells={heatmapCells}
+              cells={paddedHeatmapCells}
               onNextMonth={monthOffset < 0 ? () => setMonthOffset((offset) => offset + 1) : undefined}
             />
 
@@ -181,7 +185,10 @@ function MonthHeatmapCard({
   monthLabel: string
   year: number
   sessionsCount: number
-  cells: HeatmapDay[]
+  // `null` entries are leading/trailing week-alignment padding (see
+  // `heatmap.ts#padHeatmapWeeks`) — rendered as empty, non-interactive
+  // spacers, never a real day.
+  cells: (HeatmapDay | null)[]
   onNextMonth: (() => void) | undefined
 }) {
   return (
@@ -198,22 +205,39 @@ function MonthHeatmapCard({
         <span className="font-mono text-xs text-data">{sessionsCount} sesiones</span>
       </div>
 
+      {/* Weekday header, same 7-column grid as the cells below it, so the
+          alignment `padHeatmapWeeks` provides is actually visible/legible. */}
       <div className="grid grid-cols-7 gap-1.5">
-        {cells.map((cell) => (
-          <span
-            key={cell.dateIso}
-            title={`${cell.day}: ${cell.sessionsCount} sesión(es)`}
-            className={cx(
-              'aspect-square rounded-sm',
-              cell.isFuture && 'bg-[#111a2c]',
-              !cell.isFuture && cell.level === 0 && 'bg-surface-2',
-              !cell.isFuture && cell.level === 1 && 'bg-accent/50',
-              !cell.isFuture && cell.level === 2 && 'bg-accent/70',
-              !cell.isFuture && cell.level === 3 && 'bg-accent/90',
-              cell.isToday && 'ring-1 ring-data',
-            )}
-          />
+        {WEEKDAY_LABELS.map((label) => (
+          <span key={label} className="text-center font-mono text-[9px] text-muted">
+            {label[0]}
+          </span>
         ))}
+      </div>
+
+      <div className="grid grid-cols-7 gap-1.5">
+        {cells.map((cell, index) =>
+          cell === null ? (
+            // Padding slot: index-based key is fine here — this list is
+            // recomputed wholesale from `year`/`month`, never reordered or
+            // partially spliced in place.
+            <span key={`pad-${index}`} aria-hidden="true" className="aspect-square" />
+          ) : (
+            <span
+              key={cell.dateIso}
+              title={`${cell.day}: ${cell.sessionsCount} sesión(es)`}
+              className={cx(
+                'aspect-square rounded-sm',
+                cell.isFuture && 'bg-[#111a2c]',
+                !cell.isFuture && cell.level === 0 && 'bg-surface-2',
+                !cell.isFuture && cell.level === 1 && 'bg-accent/50',
+                !cell.isFuture && cell.level === 2 && 'bg-accent/70',
+                !cell.isFuture && cell.level === 3 && 'bg-accent/90',
+                cell.isToday && 'ring-1 ring-data',
+              )}
+            />
+          ),
+        )}
       </div>
     </div>
   )

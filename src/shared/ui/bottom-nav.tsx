@@ -26,7 +26,7 @@ export function BottomNav() {
         <Link
           to="/workout/start"
           aria-label="Iniciar workout"
-          className="-mt-6 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-background shadow-[0_0_16px_rgba(37,99,235,0.5)]"
+          className="-mt-6 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-white shadow-[0_0_16px_rgba(37,99,235,0.5)]"
         >
           <img src={iconNavStart} alt="" className="h-6 w-6" />
         </Link>

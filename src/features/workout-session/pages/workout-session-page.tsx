@@ -10,10 +10,10 @@ import iconRetry from '../../../assets/icons/icon-retry-session.svg'
 import iconWarningSmall from '../../../assets/icons/icon-warning-small.svg'
 import { cx } from '../../../shared/lib/cx'
 import { Button } from '../../../shared/ui/button'
-import { DashedButton } from '../../../shared/ui/dashed-button'
 import { Input } from '../../../shared/ui/input'
 import type { Exercise } from '../../exercises/api/exercises'
 import { useExercisesByIdsQuery } from '../../exercises/api/use-exercises'
+import { ExerciseThumbnail } from '../../exercises/components/exercise-thumbnail'
 import { QuickReferenceSheet } from '../../exercises/components/quick-reference-sheet'
 import { IconButton } from '../../../shared/ui/icon-button'
 import { useRoutineQuery } from '../../routines/api/use-routines'
@@ -83,38 +83,49 @@ function CurrentExercisePanel({
 
   return (
     <div className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-4">
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex flex-col gap-1">
-          <h2 className="font-display text-2xl font-extrabold uppercase tracking-wide text-foreground">
-            {exerciseInfo?.name ?? workoutExercise.exercise_id}
-          </h2>
-          {lastWeight != null && (
-            <span className="flex items-center gap-1.5 font-mono text-xs text-muted">
-              <img src={iconClock} alt="" className="h-3.5 w-3.5" />
-              ÚLTIMO: {lastWeight} KG
-            </span>
-          )}
-          {planned && (
-            <span className="font-mono text-xs text-muted">
-              Planeado: {planned.targetSets ?? '—'} x {planned.targetReps ?? '—'}
-            </span>
-          )}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-3">
+          <ExerciseThumbnail
+            src={exerciseInfo?.image}
+            alt=""
+            className="h-12 w-12 shrink-0 rounded-lg border border-border bg-surface-2"
+          />
+          <div className="flex min-w-0 flex-col gap-1">
+            <h2 className="truncate font-display text-2xl font-extrabold uppercase tracking-wide text-foreground">
+              {exerciseInfo?.name ?? workoutExercise.exercise_id}
+            </h2>
+            {lastWeight != null && (
+              <span className="flex items-center gap-1.5 font-mono text-xs text-muted">
+                <img src={iconClock} alt="" className="h-3.5 w-3.5" />
+                ÚLTIMO: {lastWeight} KG
+              </span>
+            )}
+            {planned && (
+              <span className="font-mono text-xs text-muted">
+                Planeado: {planned.targetSets ?? '—'} x {planned.targetReps ?? '—'}
+              </span>
+            )}
+          </div>
         </div>
-        {exerciseInfo?.muscle_group && (
-          <span className="shrink-0 rounded-full bg-accent/15 px-2.5 py-1 font-mono text-[11px] uppercase tracking-wide text-data">
-            {exerciseInfo.muscle_group}
-          </span>
-        )}
-        <IconButton
-          size="sm"
-          aria-label="Referencia rápida del ejercicio"
-          onClick={() => setQuickReferenceOpen(true)}
-        >
-          ?
-        </IconButton>
-        <Button type="button" variant="ghost" size="sm" onClick={onToggleSkip}>
-          {skipped ? 'Deshacer' : 'Saltar'}
-        </Button>
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          {exerciseInfo?.muscle_group && (
+            <span className="rounded-full bg-accent/15 px-2.5 py-1 font-mono text-[11px] uppercase tracking-wide text-data">
+              {exerciseInfo.muscle_group}
+            </span>
+          )}
+          <div className="flex items-center gap-1">
+            <IconButton
+              size="sm"
+              aria-label="Referencia rápida del ejercicio"
+              onClick={() => setQuickReferenceOpen(true)}
+            >
+              ?
+            </IconButton>
+            <Button type="button" variant="ghost" size="sm" onClick={onToggleSkip}>
+              {skipped ? 'Deshacer' : 'Saltar'}
+            </Button>
+          </div>
+        </div>
       </div>
 
       {exerciseInfo && (
@@ -130,7 +141,10 @@ function CurrentExercisePanel({
         <p className="text-sm text-muted">Ejercicio saltado — sus sets quedan sin completar.</p>
       ) : (
         <>
-          <div className="grid grid-cols-[2rem_1fr_3.5rem_3.5rem_2rem] gap-2 font-mono text-[10px] uppercase tracking-wide text-muted">
+          {/* `px-2` matches the data rows' own inset below (`rounded-lg border px-2`)
+              — without it the header labels started 0.5rem to the left of their
+              columns, making the spacing look uneven against the real data. */}
+          <div className="grid grid-cols-[2rem_1fr_3.5rem_3.5rem_2rem] gap-2 px-2 font-mono text-[10px] uppercase tracking-wide text-muted">
             <span>Set</span>
             <span>Anterior</span>
             <span>Kg</span>
@@ -207,17 +221,27 @@ function CurrentExercisePanel({
             })}
           </ul>
 
-          <div className="flex items-center gap-2">
-            <DashedButton
+          {/* Single bordered bar for both actions — previously "Discos" was a
+              separate borderless ghost button next to a dashed "Agregar set"
+              pill, which read as two unrelated floating controls instead of
+              one row. */}
+          <div className="flex items-stretch overflow-hidden rounded-xl border border-dashed border-border">
+            <button
+              type="button"
               onClick={() => onLogSet(lastWeight ?? 0)}
-              className="flex-1 py-2 font-mono text-xs uppercase tracking-wide text-muted"
+              className="flex flex-1 items-center justify-center gap-1.5 py-2 font-mono text-xs uppercase tracking-wide text-muted transition-colors hover:bg-surface-2"
             >
               <img src={iconPlus} alt="" className="h-3.5 w-3.5" />
               Agregar set
-            </DashedButton>
-            <Button type="button" variant="ghost" size="sm" onClick={() => onOpenPlateCalculator(lastWeight ?? 0)}>
+            </button>
+            <span aria-hidden="true" className="w-px bg-border" />
+            <button
+              type="button"
+              onClick={() => onOpenPlateCalculator(lastWeight ?? 0)}
+              className="flex items-center px-3 font-mono text-xs uppercase tracking-wide text-muted transition-colors hover:bg-surface-2"
+            >
               Discos
-            </Button>
+            </button>
           </div>
 
           {currentSetIndex >= 0 && (

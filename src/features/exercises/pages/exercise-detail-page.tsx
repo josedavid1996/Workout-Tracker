@@ -16,6 +16,7 @@ import { Button } from '../../../shared/ui/button'
 import { Chip } from '../../../shared/ui/chip'
 import { Skeleton } from '../../../shared/ui/skeleton'
 import { toCountableSet } from '../../workout-session/lib/to-countable-set'
+import { ExerciseThumbnail } from '../components/exercise-thumbnail'
 import { useExerciseSetHistoryQuery } from '../api/use-exercise-history'
 import { useExerciseQuery } from '../api/use-exercises'
 import { computeEightWeekDelta } from '../lib/eight-week-delta'
@@ -63,6 +64,10 @@ export function ExerciseDetailPage() {
   const historyQuery = useExerciseSetHistoryQuery(id)
 
   const [chartMetric, setChartMetric] = useState<ChartMetric>('weight')
+  // Static photo by default, real animated demonstration on demand — only
+  // offered when the catalog row actually has a `gif_url` (PR12: this
+  // exercise's real media was never shown here at all before this fix).
+  const [showGif, setShowGif] = useState(false)
 
   const history = useMemo(() => historyQuery.data ?? [], [historyQuery.data])
   const countableSets: CountableSet[] = useMemo(() => history.filter(isCountable).map(toCountableSet), [history])
@@ -125,6 +130,26 @@ export function ExerciseDetailPage() {
             {[exerciseQuery.data.muscle_group, exerciseQuery.data.equipment].filter(Boolean).join(' · ')}
           </span>
         )}
+
+        {exerciseQuery.data && (exerciseQuery.data.image || exerciseQuery.data.gif_url) && (
+          <div className="flex w-full flex-col items-center gap-2 pt-2">
+            <ExerciseThumbnail
+              src={showGif && exerciseQuery.data.gif_url ? exerciseQuery.data.gif_url : exerciseQuery.data.image}
+              alt={exerciseQuery.data.name}
+              className="h-40 w-full max-w-xs rounded-xl border border-border bg-surface-2"
+            />
+            {exerciseQuery.data.image && exerciseQuery.data.gif_url && (
+              <div className="flex gap-1.5">
+                <Chip active={!showGif} onClick={() => setShowGif(false)}>
+                  Foto
+                </Chip>
+                <Chip active={showGif} onClick={() => setShowGif(true)}>
+                  Gif
+                </Chip>
+              </div>
+            )}
+          </div>
+        )}
       </header>
 
       <div className="mx-auto flex max-w-md flex-col gap-4 px-4 pt-4">
@@ -171,7 +196,7 @@ export function ExerciseDetailPage() {
             <p className="text-sm text-muted">Registrá este ejercicio en un entrenamiento para ver tu progreso.</p>
             <Link
               to="/workout/start"
-              className="flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm text-background"
+              className="flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm text-white"
             >
               <img src={iconPlay} alt="" className="h-4 w-4" />
               Iniciar workout

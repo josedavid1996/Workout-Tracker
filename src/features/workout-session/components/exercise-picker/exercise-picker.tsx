@@ -5,10 +5,10 @@ import type { EquipmentCategory } from '../../../exercises/lib/equipment-categor
 import {
   EQUIPMENT_CATEGORIES,
   equipmentCategoryLabel,
-  equipmentToCategory,
   rawEquipmentValuesForCategory,
 } from '../../../exercises/lib/equipment-category'
 import { EQUIPMENT_CATEGORY_ICONS } from '../../../exercises/lib/equipment-icons'
+import { ExerciseThumbnail } from '../../../exercises/components/exercise-thumbnail'
 import { QuickReferenceSheet } from '../../../exercises/components/quick-reference-sheet'
 import { Input } from '../../../../shared/ui/input'
 import { Sheet } from '../../../../shared/ui/sheet'
@@ -17,7 +17,6 @@ import { IconButton } from '../../../../shared/ui/icon-button'
 import { cx } from '../../../../shared/lib/cx'
 import { useDebouncedValue } from '../../../../shared/lib/use-debounced-value'
 import iconAddSmall from '../../../../assets/icons/icon-add-small.svg'
-import iconExerciseGeneric from '../../../../assets/icons/icon-exercise-generic.svg'
 import iconSearch from '../../../../assets/icons/icon-search.svg'
 import {
   EXERCISE_BODY_PART_OPTIONS,
@@ -45,9 +44,7 @@ function ExerciseResultItem({
   onSelect: (exercise: Exercise) => void
   compact?: boolean
 }) {
-  const icon = exercise.image ? EQUIPMENT_CATEGORY_ICONS[equipmentToCategory(exercise.equipment)] : iconExerciseGeneric
   const [quickReferenceOpen, setQuickReferenceOpen] = useState(false)
-  console.log(exercise.image,'exercise',icon)
   return (
     <li className="flex items-center gap-1.5">
       <button
@@ -58,7 +55,14 @@ function ExerciseResultItem({
           compact && 'border-transparent bg-transparent px-0 py-1.5',
         )}
       >
-        <img src={icon} alt="" className="h-5 w-5 shrink-0 opacity-80" />
+        <ExerciseThumbnail
+          src={exercise.image}
+          alt=""
+          className={cx(
+            'shrink-0 rounded-md border border-border bg-surface-2',
+            compact ? 'h-8 w-8' : 'h-10 w-10',
+          )}
+        />
         <div className="flex flex-1 flex-col">
           <span className="text-foreground">{exercise.name}</span>
           {!compact && (

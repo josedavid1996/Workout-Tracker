@@ -20,7 +20,7 @@ export function Chip({ active = false, icon, className, children, type = 'button
       className={cx(
         'flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs transition-colors',
         active
-          ? 'border-accent bg-accent text-background'
+          ? 'border-accent bg-accent text-white'
           : 'border-border bg-surface text-muted hover:border-accent/60',
         className,
       )}

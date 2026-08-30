@@ -556,6 +556,105 @@ display name, both contained/additive — no schema/migration change.
   start workout → log set → reload/resume → finish → summary → exercise
   detail/records) is untouched by this PR's router/bottom-nav changes.
 
+## PR12: fixes de auditoría en vivo (imágenes reales, perfil, heatmap, sesión activa, doble guardar, mensaje de login, título de pestaña)
+
+Found by a LIVE Playwright audit (real screenshots against the running app,
+not a code-reading pass) — 7 confirmed bugs, all presentation/UX-level, no
+backend/business-logic touched.
+
+- [x] **1. Imágenes reales de `exercises`**: `exercise-picker.tsx` had a
+  leftover debug `console.log(exercise.image, ...)` proving `exercise.image`
+  (a real, always-available Supabase Storage URL) was fetched but never
+  rendered — only a generic icon was shown (the code even had backwards
+  logic: it picked an equipment-category icon *only when* `exercise.image`
+  was truthy, and the generic icon otherwise, never the real photo either
+  way). Fixed with one new shared component,
+  `features/exercises/components/exercise-thumbnail.tsx#ExerciseThumbnail`
+  (TDD: RED via `Failed to resolve import` before the file existed, then
+  GREEN, 4 cases: renders the real `src`, falls back to the generic icon
+  when `src` is null, falls back on `onError` — some catalog rows have no
+  photo or a dead URL — and sets `loading="lazy"`), reused in 3 places:
+  `exercise-picker.tsx`'s result rows, `workout-session-page.tsx`'s
+  `CurrentExercisePanel` header (next to the exercise name), and
+  `exercise-detail-page.tsx`'s header (with a "Foto"/"Gif" `Chip` toggle,
+  shown only when the row has both `image` and `gif_url`). `EXERCISE_COLUMNS`
+  (`features/exercises/api/exercises.ts`) already included `image`/`gif_url`
+  since PR7/PR10 — confirmed before assuming a query change was needed.
+- [x] **2. Perfil: nombre largo rompe el layout**: `profile-page.tsx`'s name
+  row was missing `min-w-0` on its flex-1 container — at 320px a long
+  uppercase tracking-wide name (e.g. "VISUAL-AUDIT-1") would wrap to 2 lines
+  and, since the row is `items-center`, vertically re-center and overlap the
+  adjacent edit-icon button. Fixed with `min-w-0` on the column + `truncate`
+  on the name (single line, ellipsis) + `shrink-0` on the edit button so it
+  always keeps its own fixed slot; email line also gained `truncate` for the
+  same reason.
+- [x] **3. Historial: heatmap con grid roto — diagnóstico real**:
+  `history-page.tsx` rendered `computeMonthHeatmap`'s cells directly, in day
+  order, into a bare `grid-cols-7` with **no leading padding for the 1st's
+  real weekday** — so day cells never lined up under a consistent weekday
+  column month to month, and the last row simply stopped wherever
+  `daysInMonth % 7` landed (e.g. 31 → 4 full rows + a 3-cell last row),
+  reading as cut off/incomplete. The `ring-1 ring-data` border on the
+  "today" cell was intentional (not a stray `:focus-visible` leak — the
+  cells are plain `<span>`s, never focusable), but with no weekday-header
+  row to compare it against, it read as a "random" border with no clear
+  meaning. Fix: new pure `features/history/lib/heatmap.ts#padHeatmapWeeks`
+  (TDD: RED via `padHeatmapWeeks is not a function`, then GREEN, 4 cases),
+  kept **separate** from `computeMonthHeatmap` specifically so that
+  function's existing index-based tests (`cells[day - 1]`) didn't need to
+  change/break — `padHeatmapWeeks` adds `null` leading/trailing placeholder
+  cells (rendered as empty, non-interactive spacers) so the grid is always a
+  whole number of real calendar weeks. `history-page.tsx` now also renders a
+  `WEEKDAY_LABELS` header row above the grid so the alignment is actually
+  legible.
+- [x] **4. Sesión activa: header de tabla + Discos/Agregar set**:
+  `workout-session-page.tsx`'s SET/ANTERIOR/KG/REPS header row was missing
+  the `px-2` inset that every data row has (`rounded-lg border px-2`), so
+  header labels started 0.5rem left of their actual columns — added `px-2`
+  to the header grid. "Discos" (a borderless ghost button) next to "Agregar
+  set" (a dashed-border pill) read as two unrelated floating controls, not
+  one row — replaced both with two plain buttons inside one shared
+  `rounded-xl border-dashed` container split by a 1px divider, so they read
+  as a single unit (`DashedButton` became unused here and its import was
+  removed).
+- [x] **5. Crear/editar rutina: dos botones "Guardar"**:
+  `routine-form-page.tsx` had a header "Guardar" text button AND a
+  full-width "Guardar rutina" button below the form, both visible and
+  wired to the same `handleSubmit`. Kept only the full-width one (consistent
+  with every other screen's save-action pattern); the header button was
+  removed and replaced with an empty `h-9 w-9` spacer (matching
+  `IconButton`'s own size) so the title stays visually centered against
+  "Volver" on the other side.
+- [x] **6. Login: mensaje de confirmación de email desactualizado**:
+  `login-page.tsx` unconditionally showed "Revisá tu email para confirmar tu
+  cuenta antes de iniciar sesión" after every signup, but this real instance
+  has `mailer_autoconfirm: true` (already documented in this file's PR6
+  section) — a fresh signup already returns an active `session`, so the
+  message promised a step that never happens. **Decision**: rather than just
+  reword the message, made it conditional on the real `session` Supabase's
+  `signUp()` already returns — when a session comes back (autoconfirm on),
+  navigate straight to `/`; only show the "check your email" message when
+  `session` is genuinely `null` (autoconfirm off). This is robust to either
+  instance configuration, not just today's. Unit tested (TDD: RED confirmed
+  — the new case failed by staying on `/login` and showing the stale
+  message — then GREEN), 1 new case in `login-page.test.tsx` (existing
+  "session: null" case, which drove the original message, is untouched and
+  still passes).
+- [x] **7. Título de pestaña**: `index.html`'s `<title>` was still the Vite
+  scaffold default (`vite-scaffold`) — changed to `Workout Tracker`.
+- `npm run test` — **223/223 passed** (214 existing + 9 new: 4
+  `exercise-thumbnail.test.tsx` + 4 `heatmap.test.ts` (`padHeatmapWeeks`) + 1
+  `login-page.test.tsx`, none broken). `npm run build` and `npm run lint`
+  (`oxlint`, exit 0) — clean.
+- `npm run e2e` — **not re-run against the real instance in this session**
+  (no live Supabase network/credentials available here). Checked the
+  existing `e2e/full-flow.spec.ts` selectors by hand against every changed
+  file: `getByRole('button', { name: 'Agregar set' })` and
+  `getByRole('button', { name: 'Guardar rutina' })` both still match the new
+  markup (the plain-button "Agregar set"/"Discos" bar keeps the same
+  accessible name; the removed header "Guardar" button was never targeted by
+  the test). Recommend running `npm run e2e` before merging to confirm live.
+
 ## Not implemented in these PRs
 
 - `database.types.ts` generation — `src/shared/supabase/client.ts` still uses the `Record<string, unknown>` placeholder `Database` type. `features/routines/api/routines.ts` and `features/workout-session/api/workout-session.ts` work around this locally (documented inline) by casting to the untyped `SupabaseClient` default for `.from()` calls; revisit once real types are generated.

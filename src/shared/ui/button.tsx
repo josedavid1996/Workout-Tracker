@@ -10,7 +10,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantClasses: Record<ButtonVariant, string> = {
-  primary: 'bg-accent text-background hover:bg-accent/90',
+  primary: 'bg-accent text-white hover:bg-accent/90',
   secondary: 'border border-border bg-surface-2 text-foreground hover:border-accent/60',
   ghost: 'bg-transparent text-foreground hover:bg-surface',
   // No background/border/padding/rounding of its own — used for header-style

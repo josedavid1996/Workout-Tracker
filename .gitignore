@@ -22,6 +22,7 @@ coverage
 playwright-report
 test-results
 blob-report
+.playwright-mcp
 
 # Editor directories and files
 .vscode/*
