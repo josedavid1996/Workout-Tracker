@@ -9,8 +9,17 @@ export type SignInData = { user: User; session: Session }
 // mailer_autoconfirm is disabled on this instance, so a successful signUp
 // never returns an active session — the caller (login-page) must show a
 // "check your email" message rather than treating this as a logged-in state.
-export async function signUp(email: string, password: string): Promise<AuthOutcome<SignUpData>> {
-  const { data, error } = await supabase.auth.signUp({ email, password })
+export async function signUp(
+  email: string,
+  password: string,
+  displayName?: string,
+): Promise<AuthOutcome<SignUpData>> {
+  const trimmedName = displayName?.trim()
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    ...(trimmedName ? { options: { data: { display_name: trimmedName } } } : {}),
+  })
   if (error) return { data: null, error: error.message }
   return { data, error: null }
 }

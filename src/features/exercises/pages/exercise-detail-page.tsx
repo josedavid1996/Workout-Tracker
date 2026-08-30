@@ -136,7 +136,8 @@ export function ExerciseDetailPage() {
             <ExerciseThumbnail
               src={showGif && exerciseQuery.data.gif_url ? exerciseQuery.data.gif_url : exerciseQuery.data.image}
               alt={exerciseQuery.data.name}
-              className="h-40 w-full max-w-xs rounded-xl border border-border bg-surface-2"
+              fit="contain"
+              className="max-h-64 w-full max-w-xs rounded-xl border border-border bg-surface-2"
             />
             {exerciseQuery.data.image && exerciseQuery.data.gif_url && (
               <div className="flex gap-1.5">

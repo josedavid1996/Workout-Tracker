@@ -37,18 +37,25 @@ describe('LoginPage', () => {
     expect(signUp).not.toHaveBeenCalled()
   })
 
-  it('switches to signup mode and shows a confirmation message after signup', async () => {
+  it('switches to signup mode, shows a Nombre field, and passes it to signUp', async () => {
     vi.mocked(signUp).mockResolvedValue({ data: { user: {}, session: null } as never, error: null })
 
     renderPage()
 
     fireEvent.click(screen.getByRole('tab', { name: /crear cuenta/i }))
+    fireEvent.change(screen.getByLabelText(/nombre/i), { target: { value: 'Roberto' } })
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'new@b.com' } })
     fireEvent.change(screen.getByLabelText(/contraseña/i), { target: { value: 'password123' } })
     fireEvent.click(screen.getByRole('button', { name: /crear cuenta/i }))
 
-    await waitFor(() => expect(signUp).toHaveBeenCalledWith('new@b.com', 'password123'))
+    await waitFor(() => expect(signUp).toHaveBeenCalledWith('new@b.com', 'password123', 'Roberto'))
     expect(await screen.findByText(/revisá tu email/i)).toBeInTheDocument()
+  })
+
+  it('does not show the Nombre field in login mode', () => {
+    renderPage()
+
+    expect(screen.queryByLabelText(/nombre/i)).not.toBeInTheDocument()
   })
 
   // PR12 (live audit fix): this instance actually has `mailer_autoconfirm:
@@ -70,11 +77,12 @@ describe('LoginPage', () => {
     )
 
     fireEvent.click(screen.getByRole('tab', { name: /crear cuenta/i }))
+    fireEvent.change(screen.getByLabelText(/nombre/i), { target: { value: 'Roberto' } })
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'new@b.com' } })
     fireEvent.change(screen.getByLabelText(/contraseña/i), { target: { value: 'password123' } })
     fireEvent.click(screen.getByRole('button', { name: /crear cuenta/i }))
 
-    await waitFor(() => expect(signUp).toHaveBeenCalledWith('new@b.com', 'password123'))
+    await waitFor(() => expect(signUp).toHaveBeenCalledWith('new@b.com', 'password123', 'Roberto'))
     expect(await screen.findByText('Home')).toBeInTheDocument()
     expect(screen.queryByText(/revisá tu email/i)).not.toBeInTheDocument()
   })

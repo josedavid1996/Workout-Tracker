@@ -58,6 +58,15 @@ export function QuickReferenceSheet({ exerciseId, exercise: exerciseProp, open, 
             </Chip>
           </div>
 
+          {(exercise.gif_url || exercise.image) && (
+            <img
+              src={exercise.gif_url ?? exercise.image ?? undefined}
+              alt={exercise.name}
+              className="max-h-64 w-full rounded-lg border border-border bg-surface-2 object-contain"
+              loading="lazy"
+            />
+          )}
+
           {(exercise.target || (exercise.secondary_muscles && exercise.secondary_muscles.length > 0)) && (
             <div className="flex flex-col gap-1.5">
               <span className="font-mono text-xs uppercase tracking-wide text-muted">Músculos</span>

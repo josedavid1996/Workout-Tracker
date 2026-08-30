@@ -35,4 +35,17 @@ describe('ExerciseThumbnail', () => {
     const img = screen.getByAltText('Bench Press') as HTMLImageElement
     expect(img.getAttribute('loading')).toBe('lazy')
   })
+
+  it('defaults to object-cover for small square thumbnails', () => {
+    render(<ExerciseThumbnail src="https://example.com/photo.jpg" alt="Bench Press" />)
+    const img = screen.getByAltText('Bench Press') as HTMLImageElement
+    expect(img.className).toContain('object-cover')
+  })
+
+  it('uses object-contain when fit="contain" so a taller/portrait gif is never cropped', () => {
+    render(<ExerciseThumbnail src="https://example.com/photo.jpg" alt="Bench Press" fit="contain" />)
+    const img = screen.getByAltText('Bench Press') as HTMLImageElement
+    expect(img.className).toContain('object-contain')
+    expect(img.className).not.toContain('object-cover')
+  })
 })

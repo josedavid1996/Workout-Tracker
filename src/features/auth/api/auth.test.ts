@@ -39,6 +39,32 @@ describe('signUp', () => {
     expect(result.data).toBeNull()
     expect(result.error).toBe('User already registered')
   })
+
+  it('passes a given display name as user_metadata so it is set from signup, not only editable later', async () => {
+    vi.mocked(supabase.auth.signUp).mockResolvedValue({
+      data: { user: { id: 'user-1' }, session: null },
+      error: null,
+    } as never)
+
+    await signUp('a@b.com', 'password123', 'Roberto')
+
+    expect(supabase.auth.signUp).toHaveBeenCalledWith({
+      email: 'a@b.com',
+      password: 'password123',
+      options: { data: { display_name: 'Roberto' } },
+    })
+  })
+
+  it('omits options.data entirely when no display name is given (keeps the existing call shape)', async () => {
+    vi.mocked(supabase.auth.signUp).mockResolvedValue({
+      data: { user: { id: 'user-1' }, session: null },
+      error: null,
+    } as never)
+
+    await signUp('a@b.com', 'password123')
+
+    expect(supabase.auth.signUp).toHaveBeenCalledWith({ email: 'a@b.com', password: 'password123' })
+  })
 })
 
 describe('signIn', () => {

@@ -24,6 +24,7 @@ const modeTabs = [
 export function LoginPage() {
   const navigate = useNavigate()
   const [mode, setMode] = useState<Mode>('login')
+  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -52,7 +53,7 @@ export function LoginPage() {
         return
       }
 
-      const result = await signUp(email, password)
+      const result = await signUp(email, password, name)
       if (result.error !== null) {
         setError(result.error)
         return
@@ -81,6 +82,16 @@ export function LoginPage() {
         <Tabs tabs={modeTabs} value={mode} onChange={handleModeChange} />
 
         <form className="mt-6 flex flex-col gap-4" onSubmit={handleSubmit}>
+          {mode === 'signup' && (
+            <Input
+              label="Nombre"
+              type="text"
+              autoComplete="name"
+              required
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+            />
+          )}
           <Input
             label="Email"
             type="email"
