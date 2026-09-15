@@ -136,6 +136,9 @@ export function RoutinesListPage() {
 
         {isLoading && <p className="text-muted">Cargando...</p>}
         {routinesQuery.isError && <p className="text-red-400">No se pudieron cargar las rutinas.</p>}
+        {deleteMutation.isError && (
+          <p className="text-red-400">No se pudo eliminar la rutina. Probá de nuevo.</p>
+        )}
 
         {hasNoRoutines && (
           <div className="flex flex-col items-center gap-3 rounded-2xl border border-border bg-surface px-4 py-8 text-center">
