@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import iconCheckSmall from '../../../assets/icons/icon-check-small.svg'
 import iconClock from '../../../assets/icons/icon-clock.svg'
@@ -30,6 +30,7 @@ import type { SetEntry, WorkoutExerciseWithSets } from '../api/workout-session'
 import { ExercisePicker } from '../components/exercise-picker/exercise-picker'
 import { PlateCalculator } from '../components/plate-calculator/plate-calculator'
 import { TagOverlay } from '../components/tag-overlay/tag-overlay'
+import { reorderByRememberedIds } from '../lib/reorder-by-remembered-ids'
 
 interface CurrentExercisePanelProps {
   workoutExercise: WorkoutExerciseWithSets
@@ -299,7 +300,45 @@ export function WorkoutSessionPage() {
   const updateSetMutation = useUpdateSetMutation(workoutId)
   const toggleCompletedMutation = useToggleCompletedMutation(workoutId)
 
-  const exercises = workout ? workout.workout_exercises.slice().sort((a, b) => a.position - b.position) : []
+  // `set_entries` has no reliable insertion-order column on the live schema
+  // yet (see `reorder-by-remembered-ids.ts`) — Postgres/PostgREST gives no
+  // ordering guarantee across fetches, so an UPDATE elsewhere (e.g. tagging
+  // a set) can silently reshuffle which weight/reps shows under "Set 1"/
+  // "Set 2" on the next fetch. This remembers the on-screen order for the
+  // life of this page and re-applies it to every new fetch.
+  //
+  // setState during render (not in an effect) is the documented pattern for
+  // "storing information from previous renders" — https://react.dev/learn/
+  // you-might-not-need-an-effect#storing-information-from-previous-renders
+  // — it lets this same render use the corrected order (no one-frame
+  // flicker of the wrong order, which an effect-based update would cause).
+  const [rememberedSetOrder, setRememberedSetOrder] = useState<Map<string, string[]>>(new Map())
+
+  const exercises = useMemo(() => {
+    if (!workout) return []
+    return workout.workout_exercises
+      .slice()
+      .sort((a, b) => a.position - b.position)
+      .map((exercise) => ({
+        ...exercise,
+        set_entries: reorderByRememberedIds(exercise.set_entries, rememberedSetOrder.get(exercise.id)),
+      }))
+  }, [workout, rememberedSetOrder])
+
+  let nextRememberedSetOrder: Map<string, string[]> | null = null
+  for (const exercise of exercises) {
+    const ids = exercise.set_entries.map((set) => set.id)
+    const existing = rememberedSetOrder.get(exercise.id)
+    const isSame = existing && existing.length === ids.length && existing.every((id, index) => id === ids[index])
+    if (!isSame) {
+      nextRememberedSetOrder ??= new Map(rememberedSetOrder)
+      nextRememberedSetOrder.set(exercise.id, ids)
+    }
+  }
+  if (nextRememberedSetOrder) {
+    setRememberedSetOrder(nextRememberedSetOrder)
+  }
+
   const exerciseIds = exercises.map((exercise) => exercise.exercise_id)
   const exerciseInfoQuery = useExercisesByIdsQuery(exerciseIds)
   const exerciseInfoById = new Map((exerciseInfoQuery.data ?? []).map((exercise) => [exercise.id, exercise]))

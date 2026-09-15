@@ -1,0 +1,17 @@
+-- `set_entries` had no column that preserves insertion order: no
+-- `created_at`, and `id` is `gen_random_uuid()` (v4, not sortable by time).
+-- Without an explicit `.order()`, Postgres/PostgREST gives no guarantee
+-- that two fetches of the same rows come back in the same order —
+-- confirmed live: an UPDATE on one set (e.g. tagging it) can change the
+-- physical row order the very next fetch returns, silently reshuffling
+-- which weight/reps shows under "Set 1"/"Set 2"/etc in the active session.
+--
+-- `default now()` backfills existing rows with the migration's own apply
+-- time — their true original order can't be recovered (nothing recorded
+-- it), but every row going forward gets a real, correct insertion order.
+--
+-- After applying this, `workout-session.ts`'s nested `set_entries` select
+-- should add `.order('created_at', { referencedTable: 'set_entries',
+-- ascending: true })`, and the client-side `reorderByRememberedIds`
+-- workaround (`reorder-by-remembered-ids.ts`) can be removed.
+alter table set_entries add column created_at timestamptz not null default now();
