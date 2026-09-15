@@ -127,9 +127,23 @@ export function ExercisePicker({ open, onClose, onSelect, relatedTo }: ExerciseP
   // Infinite scroll: fetch the next page of results once the sentinel row
   // at the bottom of the list scrolls into view within the picker's own
   // scroll container (not the window — this list scrolls inside the Sheet).
+  //
+  // `open` has to be a dependency here even though the effect body never
+  // reads it directly: `ExercisePicker` stays mounted (and its search query
+  // keeps fetching) even while closed, since the parent always renders
+  // `<ExercisePicker open={pickerOpen} .../>` unconditionally. That query
+  // routinely resolves `hasNextPage: true` before the user ever opens the
+  // sheet — at that point `loadMoreSentinelRef.current` is still null (the
+  // sentinel `<li>` only exists in the DOM while open), so this effect ran
+  // once, bailed out on `!sentinel`, and — with no `open` in its deps —
+  // never got a second chance to attach the observer once the sentinel
+  // actually existed. Confirmed live: without `open` here, infinite scroll
+  // silently never fires on a real (human-speed) open, even though it
+  // looked fine in fast automated testing where open+data-arrival happened
+  // to race the other way.
   useEffect(() => {
     const sentinel = loadMoreSentinelRef.current
-    if (!sentinel || !hasNextPage) return
+    if (!open || !sentinel || !hasNextPage) return
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -139,7 +153,7 @@ export function ExercisePicker({ open, onClose, onSelect, relatedTo }: ExerciseP
     )
     observer.observe(sentinel)
     return () => observer.disconnect()
-  }, [hasNextPage, fetchNextPage])
+  }, [open, hasNextPage, fetchNextPage])
 
   if (!open) return null
 
