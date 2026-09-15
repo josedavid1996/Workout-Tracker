@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Exercise } from '../../../exercises/api/exercises'
 import { useExerciseSearchQuery, useRelatedExercisesQuery } from '../../../exercises/api/use-exercises'
 import type { EquipmentCategory } from '../../../exercises/lib/equipment-category'
@@ -120,14 +120,35 @@ export function ExercisePicker({ open, onClose, onSelect, relatedTo }: ExerciseP
   })
   const relatedQuery = useRelatedExercisesQuery(relatedTo?.muscleGroup, relatedTo?.excludeId)
 
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null)
+  const loadMoreSentinelRef = useRef<HTMLLIElement | null>(null)
+  const { fetchNextPage, hasNextPage, isFetchingNextPage } = searchQuery
+
+  // Infinite scroll: fetch the next page of results once the sentinel row
+  // at the bottom of the list scrolls into view within the picker's own
+  // scroll container (not the window — this list scrolls inside the Sheet).
+  useEffect(() => {
+    const sentinel = loadMoreSentinelRef.current
+    if (!sentinel || !hasNextPage) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) fetchNextPage()
+      },
+      { root: scrollContainerRef.current, rootMargin: '200px' },
+    )
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [hasNextPage, fetchNextPage])
+
   if (!open) return null
 
-  const results = (searchQuery.data as Exercise[] | undefined) ?? []
+  const results = searchQuery.data?.pages.flat() ?? []
   const related = (relatedQuery.data as Exercise[] | undefined) ?? []
 
   return (
     <Sheet open={open} onClose={onClose} title="Agregar ejercicio">
-      <div className="flex max-h-[70vh] flex-col gap-3 overflow-y-auto">
+      <div ref={scrollContainerRef} className="flex max-h-[70vh] flex-col gap-3 overflow-y-auto">
         <div className="relative">
           <img src={iconSearch} alt="" className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 opacity-60" />
           <Input
@@ -192,7 +213,7 @@ export function ExercisePicker({ open, onClose, onSelect, relatedTo }: ExerciseP
         </div>
 
         <span className="font-mono text-xs text-muted">
-          {searchQuery.isLoading ? 'Buscando…' : `${results.length} resultados`}
+          {searchQuery.isLoading ? 'Buscando…' : `${results.length}${hasNextPage ? '+' : ''} resultados`}
         </span>
 
         {relatedTo && related.length > 0 && (
@@ -217,6 +238,11 @@ export function ExercisePicker({ open, onClose, onSelect, relatedTo }: ExerciseP
             {results.map((exercise) => (
               <ExerciseResultItem key={exercise.id} exercise={exercise} onSelect={onSelect} />
             ))}
+            {hasNextPage && (
+              <li ref={loadMoreSentinelRef} className="py-1 text-center font-mono text-xs text-muted">
+                {isFetchingNextPage ? 'Cargando más…' : ''}
+              </li>
+            )}
           </ul>
         </div>
       </div>

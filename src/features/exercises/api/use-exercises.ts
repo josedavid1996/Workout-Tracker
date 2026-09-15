@@ -1,6 +1,6 @@
-import { useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import type { ExerciseFilters } from './exercises'
-import { fetchExerciseById, fetchExercisesByIds, fetchRelatedExercises, searchExercises } from './exercises'
+import { SEARCH_PAGE_SIZE, fetchExerciseById, fetchExercisesByIds, fetchRelatedExercises, searchExercises } from './exercises'
 
 // Thin React Query wiring over `./exercises.ts` — no branching logic of its
 // own beyond cache keys, so it is not unit-tested separately from the
@@ -12,10 +12,15 @@ export const exercisesQueryKeys = {
   byIds: (ids: string[]) => ['exercises', 'byIds', ...[...ids].sort()] as const,
 }
 
+// Infinite scroll over the (1300+ row) catalog — each page fetches
+// `SEARCH_PAGE_SIZE` rows via `searchExercises`'s `.range()`, and there's a
+// next page exactly when the last page came back full.
 export function useExerciseSearchQuery(filters: ExerciseFilters) {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: exercisesQueryKeys.search(filters),
-    queryFn: () => searchExercises(filters),
+    queryFn: ({ pageParam }) => searchExercises(filters, pageParam),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => (lastPage.length === SEARCH_PAGE_SIZE ? allPages.length : undefined),
   })
 }
 

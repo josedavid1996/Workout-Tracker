@@ -10,6 +10,7 @@ function makeQueryBuilder(result: { data: unknown; error: unknown }) {
     neq: vi.fn(() => builder),
     ilike: vi.fn(() => builder),
     limit: vi.fn(() => builder),
+    range: vi.fn(() => builder),
     in: vi.fn(() => builder),
     single: vi.fn(() => Promise.resolve(result)),
     maybeSingle: vi.fn(() => Promise.resolve(result)),
@@ -26,7 +27,7 @@ vi.mock('../../../shared/supabase/client', () => ({
   },
 }))
 
-import { fetchExerciseById, fetchExercisesByIds, fetchRelatedExercises, searchExercises } from './exercises'
+import { SEARCH_PAGE_SIZE, fetchExerciseById, fetchExercisesByIds, fetchRelatedExercises, searchExercises } from './exercises'
 
 describe('searchExercises', () => {
   beforeEach(() => {
@@ -94,6 +95,24 @@ describe('searchExercises', () => {
     from.mockReturnValue(makeQueryBuilder({ data: null, error: { message: 'query failed' } }))
 
     await expect(searchExercises()).rejects.toEqual({ message: 'query failed' })
+  })
+
+  it('ranges over the first page by default', async () => {
+    const builder = makeQueryBuilder({ data: [], error: null })
+    from.mockReturnValue(builder)
+
+    await searchExercises()
+
+    expect(builder.range).toHaveBeenCalledWith(0, SEARCH_PAGE_SIZE - 1)
+  })
+
+  it('ranges over a later page', async () => {
+    const builder = makeQueryBuilder({ data: [], error: null })
+    from.mockReturnValue(builder)
+
+    await searchExercises({}, 2)
+
+    expect(builder.range).toHaveBeenCalledWith(2 * SEARCH_PAGE_SIZE, 3 * SEARCH_PAGE_SIZE - 1)
   })
 })
 

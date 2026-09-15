@@ -35,8 +35,12 @@ export type Exercise = {
 const EXERCISE_COLUMNS =
   'id, name, category, body_part, equipment, target, muscle_group, secondary_muscles, image, gif_url, instructions, instruction_steps'
 
-// Result set is capped — this backs an interactive picker, not a full browse/export view.
-const SEARCH_LIMIT = 50
+// Search results are paginated (`page` is 0-indexed) instead of a single
+// capped fetch — the catalog has 1300+ rows, so a one-shot `.limit()` (the
+// original approach) silently hid everything past the first page with no
+// way to reach it. `use-exercises.ts`'s `useExerciseSearchQuery` drives this
+// with `useInfiniteQuery` for the picker's infinite scroll.
+export const SEARCH_PAGE_SIZE = 30
 const RELATED_LIMIT = 6
 
 export type ExerciseFilters = {
@@ -52,8 +56,8 @@ export type ExerciseFilters = {
 
 // RLS does not apply to `exercises` (shared, read-only catalog) — no user_id
 // scoping is relevant here, unlike the owner-scoped tables in other features.
-export async function searchExercises(filters: ExerciseFilters = {}): Promise<Exercise[]> {
-  let query = db.from('exercises').select(EXERCISE_COLUMNS).order('name', { ascending: true }).limit(SEARCH_LIMIT)
+export async function searchExercises(filters: ExerciseFilters = {}, page = 0): Promise<Exercise[]> {
+  let query = db.from('exercises').select(EXERCISE_COLUMNS).order('name', { ascending: true })
 
   const name = filters.name?.trim()
   if (name) query = query.ilike('name', `%${name}%`)
@@ -64,6 +68,9 @@ export async function searchExercises(filters: ExerciseFilters = {}): Promise<Ex
   } else if (filters.equipment) {
     query = query.eq('equipment', filters.equipment)
   }
+
+  const from = page * SEARCH_PAGE_SIZE
+  query = query.range(from, from + SEARCH_PAGE_SIZE - 1)
 
   const { data, error } = await query
   if (error) throw error
