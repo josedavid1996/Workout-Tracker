@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import iconCheckLarge from '../../../assets/icons/icon-check-large.svg'
 import iconCheckSmall from '../../../assets/icons/icon-check-small.svg'
 import iconClock from '../../../assets/icons/icon-clock.svg'
 import iconClose from '../../../assets/icons/icon-close.svg'
@@ -32,8 +31,6 @@ import { ExercisePicker } from '../components/exercise-picker/exercise-picker'
 import { PlateCalculator } from '../components/plate-calculator/plate-calculator'
 import { TagOverlay } from '../components/tag-overlay/tag-overlay'
 
-type JustRegistered = { setNumber: number; weight: number; reps: number }
-
 interface CurrentExercisePanelProps {
   workoutExercise: WorkoutExerciseWithSets
   workoutId: string
@@ -45,7 +42,7 @@ interface CurrentExercisePanelProps {
   onOpenTagOverlay: (set: SetEntry) => void
   onOpenPlateCalculator: (weight: number) => void
   onLogSet: (weight: number) => void
-  onCompleteSet: (set: SetEntry, setNumber: number) => void
+  onCompleteSet: (set: SetEntry) => void
   onRetryComplete: (set: SetEntry) => void
   onChangeWeight: (id: string, weight: number) => void
   onChangeReps: (id: string, reps: number) => void
@@ -266,10 +263,7 @@ function CurrentExercisePanel({
                   <span className="font-mono text-xs uppercase tracking-wide text-muted">
                     Set {currentSetIndex + 1} de {sets.length}
                   </span>
-                  <Button
-                    type="button"
-                    onClick={() => onCompleteSet(sets[currentSetIndex], currentSetIndex + 1)}
-                  >
+                  <Button type="button" onClick={() => onCompleteSet(sets[currentSetIndex])}>
                     Completar set
                   </Button>
                 </>
@@ -282,44 +276,14 @@ function CurrentExercisePanel({
   )
 }
 
-function SetRegisteredOverlay({
-  justRegistered,
-  nextLabel,
-  onContinue,
-}: {
-  justRegistered: JustRegistered
-  nextLabel: string | null
-  onContinue: () => void
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-background px-6 text-center">
-      <span className="flex h-20 w-20 items-center justify-center rounded-full bg-positive/15">
-        <img src={iconCheckLarge} alt="" className="h-10 w-10" />
-      </span>
-      <h2 className="font-display text-xl font-extrabold uppercase tracking-wide text-foreground">Set registrado</h2>
-      <p className="font-mono text-sm text-muted">
-        Set {justRegistered.setNumber} · {justRegistered.weight} x {justRegistered.reps}
-      </p>
-      <p className="text-sm text-muted">Descansa y continúa cuando estés listo.</p>
-
-      {nextLabel && (
-        <div className="rounded-xl border border-border bg-surface px-4 py-2 font-mono text-xs uppercase tracking-wide text-muted">
-          A continuación · {nextLabel}
-        </div>
-      )}
-
-      <Button type="button" onClick={onContinue} className="mt-2 w-full max-w-xs">
-        Continuar
-      </Button>
-    </div>
-  )
-}
-
 // `/workout/:id` — the active, resumable session. NO live timers anywhere
 // (neither total duration nor rest) — a deliberate, already-taken decision
 // (see tasks.md); duration is shown only as a static value on the summary
-// page, and the "set registered" transition is a passive message the user
-// dismisses manually, never an auto-advancing countdown.
+// page. Completing a set updates its row in place (green checkmark, see
+// `CurrentExercisePanel`) with no full-screen interstitial — an earlier
+// "Set registrado" overlay forced a manual "Continuar" tap after every
+// single set, which was pure friction, not information the row itself
+// doesn't already show.
 export function WorkoutSessionPage() {
   const { id } = useParams<{ id: string }>()
   const workoutId = id as string
@@ -346,7 +310,6 @@ export function WorkoutSessionPage() {
   const [plateCalculatorWeight, setPlateCalculatorWeight] = useState<number | null>(null)
   const [skippedIds, setSkippedIds] = useState<Set<string>>(new Set())
   const [erroredSetIds, setErroredSetIds] = useState<Set<string>>(new Set())
-  const [justRegistered, setJustRegistered] = useState<JustRegistered | null>(null)
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false)
 
   // Derived, not stored: clamp defensively during render instead of via an
@@ -410,14 +373,11 @@ export function WorkoutSessionPage() {
     })
   }
 
-  function handleCompleteSet(set: SetEntry, setNumber: number) {
+  function handleCompleteSet(set: SetEntry) {
     toggleCompletedMutation.mutate(
       { id: set.id, completed: true },
       {
-        onSuccess: () => {
-          clearError(set.id)
-          setJustRegistered({ setNumber, weight: set.weight, reps: set.reps })
-        },
+        onSuccess: () => clearError(set.id),
         onError: () => markError(set.id),
       },
     )
@@ -442,9 +402,6 @@ export function WorkoutSessionPage() {
     await addExerciseMutation.mutateAsync({ exerciseId: exercise.id, position: exercises.length })
     setPickerOpen(false)
   }
-
-  const nextExercise = exercises[clampedIndex + 1]
-  const nextExerciseName = nextExercise ? (exerciseInfoById.get(nextExercise.exercise_id)?.name ?? nextExercise.exercise_id) : null
 
   return (
     <div className="min-h-dvh bg-background pb-10">
@@ -552,18 +509,6 @@ export function WorkoutSessionPage() {
         onClose={() => setPlateCalculatorWeight(null)}
         targetWeight={plateCalculatorWeight ?? 0}
       />
-
-      {justRegistered && (
-        <SetRegisteredOverlay
-          justRegistered={justRegistered}
-          nextLabel={
-            currentExercise && justRegistered.setNumber < currentExercise.set_entries.length
-              ? `Set ${justRegistered.setNumber + 1}`
-              : nextExerciseName
-          }
-          onContinue={() => setJustRegistered(null)}
-        />
-      )}
 
       {closeConfirmOpen && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-background/95 px-6 text-center">
