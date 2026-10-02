@@ -11,6 +11,7 @@ import { cx } from '../../../shared/lib/cx'
 import { generateId } from '../../../shared/lib/generate-id'
 import { BottomNav } from '../../../shared/ui/bottom-nav'
 import { Button } from '../../../shared/ui/button'
+import { Chip } from '../../../shared/ui/chip'
 import { DashedButton } from '../../../shared/ui/dashed-button'
 import { IconButton } from '../../../shared/ui/icon-button'
 import { Input } from '../../../shared/ui/input'
@@ -28,6 +29,16 @@ function toDraft(exercise: RoutineExerciseDraft): ExerciseDraft {
   return { ...exercise, key: generateId() }
 }
 
+const DAY_OPTIONS = [
+  { value: 0, label: 'Lun' },
+  { value: 1, label: 'Mar' },
+  { value: 2, label: 'Mié' },
+  { value: 3, label: 'Jue' },
+  { value: 4, label: 'Vie' },
+  { value: 5, label: 'Sáb' },
+  { value: 6, label: 'Dom' },
+] as const
+
 // Shared create/edit form (`/routines/new` and `/routines/:id/edit`), styled
 // to match `design/figma-reference/03-crear-editar-rutina.md`. Business
 // logic (reorder via `move-draft.ts`, position recompute via
@@ -44,11 +55,13 @@ export function RoutineFormPage() {
 
   const [name, setName] = useState('')
   const [nameFocused, setNameFocused] = useState(false)
+  const [dayOfWeek, setDayOfWeek] = useState<number | null>(null)
   const [exercises, setExercises] = useState<ExerciseDraft[]>([])
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pickedExercise, setPickedExercise] = useState<Exercise | null>(null)
   const [draftTargetSets, setDraftTargetSets] = useState('')
   const [draftTargetReps, setDraftTargetReps] = useState('')
+  const [draftNotes, setDraftNotes] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   const hasLoadedInitialData = useRef(false)
@@ -57,6 +70,7 @@ export function RoutineFormPage() {
     if (!isEditing || hasLoadedInitialData.current || !routineQuery.data) return
 
     setName(routineQuery.data.name)
+    setDayOfWeek(routineQuery.data.day_of_week)
     setExercises(
       routineQuery.data.routine_exercises
         .slice()
@@ -66,6 +80,7 @@ export function RoutineFormPage() {
             exerciseId: exercise.exercise_id,
             targetSets: exercise.target_sets,
             targetReps: exercise.target_reps,
+            notes: exercise.notes,
           }),
         ),
     )
@@ -111,12 +126,14 @@ export function RoutineFormPage() {
         exerciseId: pickedExercise.id,
         targetSets: draftTargetSets ? Number(draftTargetSets) : null,
         targetReps: draftTargetReps.trim() || null,
+        notes: draftNotes.trim() || null,
       }),
     ])
 
     setPickedExercise(null)
     setDraftTargetSets('')
     setDraftTargetReps('')
+    setDraftNotes('')
   }
 
   function handleRemoveExercise(key: string) {
@@ -135,9 +152,9 @@ export function RoutineFormPage() {
 
     try {
       if (isEditing) {
-        await updateMutation.mutateAsync({ name, exercises: payload })
+        await updateMutation.mutateAsync({ name, exercises: payload, dayOfWeek })
       } else {
-        await createMutation.mutateAsync({ name, exercises: payload })
+        await createMutation.mutateAsync({ name, exercises: payload, dayOfWeek })
       }
       navigate('/routines')
     } catch (submitError) {
@@ -187,6 +204,21 @@ export function RoutineFormPage() {
           />
         </div>
 
+        <div className="flex flex-col gap-1.5">
+          <span className="font-mono text-xs uppercase tracking-wide text-muted">Día</span>
+          <div className="flex flex-wrap gap-1.5">
+            {DAY_OPTIONS.map((option) => (
+              <Chip
+                key={option.value}
+                active={dayOfWeek === option.value}
+                onClick={() => setDayOfWeek(dayOfWeek === option.value ? null : option.value)}
+              >
+                {option.label}
+              </Chip>
+            ))}
+          </div>
+        </div>
+
         {touchedMuscleGroups.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {touchedMuscleGroups.map((muscleGroup) => (
@@ -223,37 +255,38 @@ export function RoutineFormPage() {
                   <span className="font-mono text-xs text-muted">
                     {exercise.targetSets ?? '—'} × {exercise.targetReps ?? '—'}
                   </span>
+                  {exercise.notes && <span className="text-xs text-muted">{exercise.notes}</span>}
                 </div>
                 {/* No real drag-and-drop in scope (per 03-crear-editar-rutina.md) —
                     the grip icon above is visual only; reordering still uses the
                     tested `moveDraft` up/down logic via these buttons. */}
                 <div className="flex items-center gap-0.5">
-                  <button
-                    type="button"
+                  <IconButton
+                    size="sm"
                     aria-label="Mover arriba"
                     disabled={index === 0}
                     onClick={() => handleMoveExercise(index, 'up')}
-                    className="rounded p-1 text-muted hover:text-foreground disabled:opacity-30"
+                    className="border-transparent bg-transparent text-muted hover:border-transparent hover:text-foreground"
                   >
                     ↑
-                  </button>
-                  <button
-                    type="button"
+                  </IconButton>
+                  <IconButton
+                    size="sm"
                     aria-label="Mover abajo"
                     disabled={index === exercises.length - 1}
                     onClick={() => handleMoveExercise(index, 'down')}
-                    className="rounded p-1 text-muted hover:text-foreground disabled:opacity-30"
+                    className="border-transparent bg-transparent text-muted hover:border-transparent hover:text-foreground"
                   >
                     ↓
-                  </button>
-                  <button
-                    type="button"
+                  </IconButton>
+                  <IconButton
+                    size="sm"
                     aria-label="Quitar"
                     onClick={() => handleRemoveExercise(exercise.key)}
-                    className="rounded p-1 text-muted hover:text-red-400"
+                    className="border-transparent bg-transparent text-muted hover:border-transparent hover:text-red-400"
                   >
                     <img src={iconRemove} alt="" className="h-4 w-4" />
-                  </button>
+                  </IconButton>
                 </div>
               </li>
             ))}
@@ -310,6 +343,12 @@ export function RoutineFormPage() {
             placeholder="8-10"
             value={draftTargetReps}
             onChange={(event) => setDraftTargetReps(event.target.value)}
+          />
+          <Input
+            label="Notas (opcional)"
+            placeholder="Bajar peso, cuidado el hombro..."
+            value={draftNotes}
+            onChange={(event) => setDraftNotes(event.target.value)}
           />
           <Button type="submit">Agregar</Button>
         </form>

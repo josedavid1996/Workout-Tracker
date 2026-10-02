@@ -8,8 +8,8 @@ describe('toRoutineExerciseRows', () => {
 
   it('assigns 0-based position matching draft order', () => {
     const rows = toRoutineExerciseRows('routine-1', 'user-1', [
-      { exerciseId: 'ex-a', targetSets: 3, targetReps: '8-10' },
-      { exerciseId: 'ex-b', targetSets: null, targetReps: null },
+      { exerciseId: 'ex-a', targetSets: 3, targetReps: '8-10', notes: 'bajar peso' },
+      { exerciseId: 'ex-b', targetSets: null, targetReps: null, notes: null },
     ])
 
     expect(rows).toEqual([
@@ -20,6 +20,7 @@ describe('toRoutineExerciseRows', () => {
         position: 0,
         target_sets: 3,
         target_reps: '8-10',
+        notes: 'bajar peso',
       },
       {
         routine_id: 'routine-1',
@@ -28,15 +29,16 @@ describe('toRoutineExerciseRows', () => {
         position: 1,
         target_sets: null,
         target_reps: null,
+        notes: null,
       },
     ])
   })
 
   it('recomputes position from array order, not from any prior index', () => {
     const rows = toRoutineExerciseRows('routine-1', 'user-1', [
-      { exerciseId: 'ex-c', targetSets: 5, targetReps: '5' },
-      { exerciseId: 'ex-a', targetSets: 3, targetReps: '8-10' },
-      { exerciseId: 'ex-b', targetSets: null, targetReps: null },
+      { exerciseId: 'ex-c', targetSets: 5, targetReps: '5', notes: null },
+      { exerciseId: 'ex-a', targetSets: 3, targetReps: '8-10', notes: null },
+      { exerciseId: 'ex-b', targetSets: null, targetReps: null, notes: null },
     ])
 
     expect(rows.map((row) => row.exercise_id)).toEqual(['ex-c', 'ex-a', 'ex-b'])

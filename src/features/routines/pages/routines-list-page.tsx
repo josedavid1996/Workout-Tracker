@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import iconCalendar from '../../../assets/icons/icon-calendar.svg'
 import iconEmptyList from '../../../assets/icons/icon-empty-list.svg'
 import iconEmptyRings from '../../../assets/icons/icon-empty-rings.svg'
 import iconPlus from '../../../assets/icons/icon-plus.svg'
@@ -27,6 +28,7 @@ const FEATURED_EXERCISE_CHIPS = 2
 // `exercise_id`s; names/body_part are resolved via the existing
 // `useExercisesByIdsQuery` (already used by the workout summary page).
 export function RoutinesListPage() {
+  const navigate = useNavigate()
   const routinesQuery = useRoutinesWithExercisesQuery()
   const historyQuery = useWorkoutHistoryQuery()
   const deleteMutation = useDeleteRoutineMutation()
@@ -107,6 +109,9 @@ export function RoutinesListPage() {
         <div className="flex items-center justify-between">
           <h1 className="font-display text-2xl font-extrabold uppercase tracking-wide text-foreground">Rutinas</h1>
           <div className="flex items-center gap-2">
+            <IconButton aria-label="Ver semana" onClick={() => navigate('/routines/preview')}>
+              <img src={iconCalendar} alt="" className="h-4 w-4" />
+            </IconButton>
             <IconButton
               aria-label={searchOpen ? 'Cerrar búsqueda' : 'Buscar'}
               aria-pressed={searchOpen}

@@ -2,6 +2,7 @@ export type RoutineExerciseDraft = {
   exerciseId: string
   targetSets: number | null
   targetReps: string | null
+  notes: string | null
 }
 
 export type RoutineExerciseRow = {
@@ -11,6 +12,7 @@ export type RoutineExerciseRow = {
   position: number
   target_sets: number | null
   target_reps: string | null
+  notes: string | null
 }
 
 // Recomputes `position` (0-based) from the draft list's array order right
@@ -29,5 +31,6 @@ export function toRoutineExerciseRows(
     position: index,
     target_sets: exercise.targetSets,
     target_reps: exercise.targetReps,
+    notes: exercise.notes,
   }))
 }

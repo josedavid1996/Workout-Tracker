@@ -36,23 +36,27 @@ describe('createRoutine', () => {
     getUser.mockReset()
   })
 
-  it('inserts the routine, then inserts routine_exercises with recomputed positions', async () => {
+  it('inserts the routine with day_of_week, then inserts routine_exercises with recomputed positions', async () => {
     getUser.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null })
 
     const routineBuilder = makeQueryBuilder({
-      data: { id: 'routine-1', name: 'Push day', created_at: '2026-01-01' },
+      data: { id: 'routine-1', name: 'Push day', created_at: '2026-01-01', day_of_week: 0 },
       error: null,
     })
     const exercisesBuilder = makeQueryBuilder({ data: null, error: null })
     from.mockImplementation((table: string) => (table === 'routines' ? routineBuilder : exercisesBuilder))
 
-    const result = await createRoutine('Push day', [
-      { exerciseId: 'ex-a', targetSets: 3, targetReps: '8-10' },
-      { exerciseId: 'ex-b', targetSets: null, targetReps: null },
-    ])
+    const result = await createRoutine(
+      'Push day',
+      [
+        { exerciseId: 'ex-a', targetSets: 3, targetReps: '8-10', notes: null },
+        { exerciseId: 'ex-b', targetSets: null, targetReps: null, notes: null },
+      ],
+      0,
+    )
 
     expect(from).toHaveBeenCalledWith('routines')
-    expect(routineBuilder.insert).toHaveBeenCalledWith({ name: 'Push day', user_id: 'user-1' })
+    expect(routineBuilder.insert).toHaveBeenCalledWith({ name: 'Push day', user_id: 'user-1', day_of_week: 0 })
 
     expect(from).toHaveBeenCalledWith('routine_exercises')
     expect(exercisesBuilder.insert).toHaveBeenCalledWith([
@@ -60,19 +64,19 @@ describe('createRoutine', () => {
       expect.objectContaining({ exercise_id: 'ex-b', position: 1, routine_id: 'routine-1', user_id: 'user-1' }),
     ])
 
-    expect(result).toEqual({ id: 'routine-1', name: 'Push day', created_at: '2026-01-01' })
+    expect(result).toEqual({ id: 'routine-1', name: 'Push day', created_at: '2026-01-01', day_of_week: 0 })
   })
 
   it('does not insert routine_exercises when the exercise list is empty', async () => {
     getUser.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null })
 
     const routineBuilder = makeQueryBuilder({
-      data: { id: 'routine-1', name: 'Push day', created_at: '2026-01-01' },
+      data: { id: 'routine-1', name: 'Push day', created_at: '2026-01-01', day_of_week: null },
       error: null,
     })
     from.mockReturnValue(routineBuilder)
 
-    await createRoutine('Push day', [])
+    await createRoutine('Push day', [], null)
 
     expect(from).toHaveBeenCalledTimes(1)
     expect(from).toHaveBeenCalledWith('routines')
@@ -81,7 +85,7 @@ describe('createRoutine', () => {
   it('throws when there is no authenticated user', async () => {
     getUser.mockResolvedValue({ data: { user: null }, error: null })
 
-    await expect(createRoutine('Push day', [])).rejects.toThrow('Not authenticated')
+    await expect(createRoutine('Push day', [], null)).rejects.toThrow('Not authenticated')
     expect(from).not.toHaveBeenCalled()
   })
 
@@ -89,7 +93,7 @@ describe('createRoutine', () => {
     getUser.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null })
     from.mockReturnValue(makeQueryBuilder({ data: null, error: { message: 'insert failed' } }))
 
-    await expect(createRoutine('Push day', [])).rejects.toEqual({ message: 'insert failed' })
+    await expect(createRoutine('Push day', [], null)).rejects.toEqual({ message: 'insert failed' })
   })
 })
 
@@ -114,9 +118,14 @@ describe('updateRoutine', () => {
       return insertBuilder
     })
 
-    await updateRoutine('routine-1', 'New name', [{ exerciseId: 'ex-a', targetSets: 4, targetReps: '5' }])
+    await updateRoutine(
+      'routine-1',
+      'New name',
+      [{ exerciseId: 'ex-a', targetSets: 4, targetReps: '5', notes: null }],
+      1,
+    )
 
-    expect(renameBuilder.update).toHaveBeenCalledWith({ name: 'New name' })
+    expect(renameBuilder.update).toHaveBeenCalledWith({ name: 'New name', day_of_week: 1 })
     expect(renameBuilder.eq).toHaveBeenCalledWith('id', 'routine-1')
     expect(deleteBuilder.delete).toHaveBeenCalled()
     expect(deleteBuilder.eq).toHaveBeenCalledWith('routine_id', 'routine-1')
@@ -128,7 +137,7 @@ describe('updateRoutine', () => {
   it('throws when there is no authenticated user', async () => {
     getUser.mockResolvedValue({ data: { user: null }, error: null })
 
-    await expect(updateRoutine('routine-1', 'New name', [])).rejects.toThrow('Not authenticated')
+    await expect(updateRoutine('routine-1', 'New name', [], null)).rejects.toThrow('Not authenticated')
   })
 })
 

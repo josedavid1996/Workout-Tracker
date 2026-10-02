@@ -16,6 +16,7 @@ export type Routine = {
   id: string
   name: string
   created_at: string
+  day_of_week: number | null
 }
 
 export type RoutineExercise = {
@@ -25,18 +26,20 @@ export type RoutineExercise = {
   position: number
   target_sets: number | null
   target_reps: string | null
+  notes: string | null
 }
 
 export type RoutineWithExercises = Routine & { routine_exercises: RoutineExercise[] }
 
-const ROUTINE_EXERCISE_COLUMNS = 'id, routine_id, exercise_id, position, target_sets, target_reps'
+const ROUTINE_EXERCISE_COLUMNS =
+  'id, routine_id, exercise_id, position, target_sets, target_reps, notes'
 
 // RLS (`auth.uid() = user_id`) already scopes every one of these queries to
 // the current user — no client-side `user_id` filter is added on reads.
 export async function fetchRoutines(): Promise<Routine[]> {
   const { data, error } = await db
     .from('routines')
-    .select('id, name, created_at')
+    .select('id, name, created_at, day_of_week')
     .order('created_at', { ascending: false })
 
   if (error) throw error
@@ -53,7 +56,7 @@ export async function fetchRoutines(): Promise<Routine[]> {
 export async function fetchRoutinesWithExercises(): Promise<RoutineWithExercises[]> {
   const { data, error } = await db
     .from('routines')
-    .select(`id, name, created_at, routine_exercises(${ROUTINE_EXERCISE_COLUMNS})`)
+    .select(`id, name, created_at, day_of_week, routine_exercises(${ROUTINE_EXERCISE_COLUMNS})`)
     .order('created_at', { ascending: false })
     .order('position', { referencedTable: 'routine_exercises', ascending: true })
 
@@ -64,7 +67,7 @@ export async function fetchRoutinesWithExercises(): Promise<RoutineWithExercises
 export async function fetchRoutine(id: string): Promise<RoutineWithExercises> {
   const { data, error } = await db
     .from('routines')
-    .select(`id, name, created_at, routine_exercises(${ROUTINE_EXERCISE_COLUMNS})`)
+    .select(`id, name, created_at, day_of_week, routine_exercises(${ROUTINE_EXERCISE_COLUMNS})`)
     .eq('id', id)
     .order('position', { referencedTable: 'routine_exercises', ascending: true })
     .single()
@@ -83,13 +86,17 @@ async function requireUserId(): Promise<string> {
   return userId
 }
 
-export async function createRoutine(name: string, exercises: RoutineExerciseDraft[]): Promise<Routine> {
+export async function createRoutine(
+  name: string,
+  exercises: RoutineExerciseDraft[],
+  dayOfWeek: number | null,
+): Promise<Routine> {
   const userId = await requireUserId()
 
   const { data: routine, error: routineError } = await db
     .from('routines')
-    .insert({ name, user_id: userId })
-    .select('id, name, created_at')
+    .insert({ name, user_id: userId, day_of_week: dayOfWeek })
+    .select('id, name, created_at, day_of_week')
     .single()
 
   if (routineError) throw routineError
@@ -112,10 +119,14 @@ export async function updateRoutine(
   id: string,
   name: string,
   exercises: RoutineExerciseDraft[],
+  dayOfWeek: number | null,
 ): Promise<void> {
   const userId = await requireUserId()
 
-  const { error: renameError } = await db.from('routines').update({ name }).eq('id', id)
+  const { error: renameError } = await db
+    .from('routines')
+    .update({ name, day_of_week: dayOfWeek })
+    .eq('id', id)
   if (renameError) throw renameError
 
   const { error: deleteError } = await db.from('routine_exercises').delete().eq('routine_id', id)

@@ -6,6 +6,7 @@ import { ExerciseDetailPage } from '../features/exercises/pages/exercise-detail-
 import { HistoryPage } from '../features/history/pages/history-page'
 import { HomePage } from '../features/home/pages/home-page'
 import { RoutineFormPage } from '../features/routines/pages/routine-form-page'
+import { RoutineWeeklyPreviewPage } from '../features/routines/pages/routine-weekly-preview-page'
 import { RoutinesListPage } from '../features/routines/pages/routines-list-page'
 import { WorkoutSessionPage } from '../features/workout-session/pages/workout-session-page'
 import { WorkoutStartPage } from '../features/workout-session/pages/workout-start-page'
@@ -29,6 +30,14 @@ export function AppRouter() {
         element={
           <ProtectedRoute>
             <RoutinesListPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/routines/preview"
+        element={
+          <ProtectedRoute>
+            <RoutineWeeklyPreviewPage />
           </ProtectedRoute>
         }
       />

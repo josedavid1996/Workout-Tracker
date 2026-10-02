@@ -41,8 +41,15 @@ export function useCreateRoutineMutation() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ name, exercises }: { name: string; exercises: RoutineExerciseDraft[] }) =>
-      createRoutine(name, exercises),
+    mutationFn: ({
+      name,
+      exercises,
+      dayOfWeek,
+    }: {
+      name: string
+      exercises: RoutineExerciseDraft[]
+      dayOfWeek: number | null
+    }) => createRoutine(name, exercises, dayOfWeek),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: routinesQueryKeys.all })
       queryClient.invalidateQueries({ queryKey: routinesQueryKeys.withExercises })
@@ -54,8 +61,15 @@ export function useUpdateRoutineMutation(id: string) {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ name, exercises }: { name: string; exercises: RoutineExerciseDraft[] }) =>
-      updateRoutine(id, name, exercises),
+    mutationFn: ({
+      name,
+      exercises,
+      dayOfWeek,
+    }: {
+      name: string
+      exercises: RoutineExerciseDraft[]
+      dayOfWeek: number | null
+    }) => updateRoutine(id, name, exercises, dayOfWeek),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: routinesQueryKeys.all })
       queryClient.invalidateQueries({ queryKey: routinesQueryKeys.withExercises })
