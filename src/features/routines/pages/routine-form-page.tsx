@@ -18,10 +18,11 @@ import { Input } from '../../../shared/ui/input'
 import { Sheet } from '../../../shared/ui/sheet'
 import type { Exercise } from '../../exercises/api/exercises'
 import { useExercisesByIdsQuery } from '../../exercises/api/use-exercises'
-import { muscleLabel } from '../../exercises/lib/exercise-labels'
+import { uniqueMuscleLabels } from '../../exercises/lib/exercise-labels'
 import { ExercisePicker } from '../../workout-session/components/exercise-picker/exercise-picker'
 import type { RoutineExerciseDraft } from '../api/routine-exercises-payload'
 import { useCreateRoutineMutation, useRoutineQuery, useUpdateRoutineMutation } from '../api/use-routines'
+import { DEFAULT_TARGET_REPS, DEFAULT_TARGET_SETS, validateExerciseTargets } from '../lib/exercise-targets'
 import { moveDraft } from '../lib/move-draft'
 
 type ExerciseDraft = RoutineExerciseDraft & { key: string }
@@ -60,8 +61,8 @@ export function RoutineFormPage() {
   const [exercises, setExercises] = useState<ExerciseDraft[]>([])
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pickedExercise, setPickedExercise] = useState<Exercise | null>(null)
-  const [draftTargetSets, setDraftTargetSets] = useState('')
-  const [draftTargetReps, setDraftTargetReps] = useState('')
+  const [draftTargetSets, setDraftTargetSets] = useState(DEFAULT_TARGET_SETS)
+  const [draftTargetReps, setDraftTargetReps] = useState(DEFAULT_TARGET_REPS)
   const [draftNotes, setDraftNotes] = useState('')
   const [error, setError] = useState<string | null>(null)
 
@@ -100,17 +101,15 @@ export function RoutineFormPage() {
     return map
   }, [exerciseDetailsQuery.data])
 
-  const touchedMuscleGroups = useMemo(
+  // Uses `target` (not the unreliable `muscle_group` column) and dedupes by
+  // the displayed label so synonyms (e.g. `traps`/`trapezius`) render once.
+  const touchedMuscleLabels = useMemo(
     () =>
-      Array.from(
-        new Set(
-          exercises
-            .map((exercise) => exerciseDetailsById.get(exercise.exerciseId)?.muscle_group)
-            .filter((value): value is string => Boolean(value)),
-        ),
-      ),
+      uniqueMuscleLabels(exercises.map((exercise) => exerciseDetailsById.get(exercise.exerciseId)?.target)),
     [exercises, exerciseDetailsById],
   )
+
+  const targetsValidation = validateExerciseTargets(draftTargetSets, draftTargetReps)
 
   function handlePickExercise(exercise: Exercise) {
     setPickedExercise(exercise)
@@ -119,21 +118,21 @@ export function RoutineFormPage() {
 
   function handleConfirmExercise(event: FormEvent) {
     event.preventDefault()
-    if (!pickedExercise) return
+    if (!pickedExercise || !targetsValidation.ok) return
 
     setExercises((current) => [
       ...current,
       toDraft({
         exerciseId: pickedExercise.id,
-        targetSets: draftTargetSets ? Number(draftTargetSets) : null,
-        targetReps: draftTargetReps.trim() || null,
+        targetSets: targetsValidation.targetSets,
+        targetReps: targetsValidation.targetReps,
         notes: draftNotes.trim() || null,
       }),
     ])
 
     setPickedExercise(null)
-    setDraftTargetSets('')
-    setDraftTargetReps('')
+    setDraftTargetSets(DEFAULT_TARGET_SETS)
+    setDraftTargetReps(DEFAULT_TARGET_REPS)
     setDraftNotes('')
   }
 
@@ -220,14 +219,14 @@ export function RoutineFormPage() {
           </div>
         </div>
 
-        {touchedMuscleGroups.length > 0 && (
+        {touchedMuscleLabels.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
-            {touchedMuscleGroups.map((muscleGroup) => (
+            {touchedMuscleLabels.map((label) => (
               <span
-                key={muscleGroup}
+                key={label}
                 className="rounded-full border border-accent/30 bg-accent/10 px-2.5 py-1 text-xs text-data"
               >
-                {muscleLabel(muscleGroup)}
+                {label}
               </span>
             ))}
           </div>
@@ -335,15 +334,20 @@ export function RoutineFormPage() {
           <Input
             label="Series objetivo"
             type="number"
-            min={0}
+            inputMode="numeric"
+            min={1}
+            max={20}
+            step={1}
             value={draftTargetSets}
             onChange={(event) => setDraftTargetSets(event.target.value)}
+            error={targetsValidation.ok ? undefined : (targetsValidation.setsError ?? undefined)}
           />
           <Input
             label="Reps objetivo"
             placeholder="8-10"
             value={draftTargetReps}
             onChange={(event) => setDraftTargetReps(event.target.value)}
+            error={targetsValidation.ok ? undefined : (targetsValidation.repsError ?? undefined)}
           />
           <Input
             label="Notas (opcional)"
@@ -351,7 +355,9 @@ export function RoutineFormPage() {
             value={draftNotes}
             onChange={(event) => setDraftNotes(event.target.value)}
           />
-          <Button type="submit">Agregar</Button>
+          <Button type="submit" disabled={!targetsValidation.ok}>
+            Agregar
+          </Button>
         </form>
       </Sheet>
 

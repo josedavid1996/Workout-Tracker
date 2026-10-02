@@ -16,6 +16,9 @@ vi.mock('../../../exercises/api/use-exercises', () => ({
   useExerciseSearchQuery: (...args: unknown[]) => useExerciseSearchQuery(...args),
   useRelatedExercisesQuery: (...args: unknown[]) => useRelatedExercisesQuery(...args),
   useExerciseQuery: (...args: unknown[]) => useExerciseQuery(...args),
+  // Mounted by each row's `QuickReferenceSheet`; idle in these tests.
+  useExerciseFocusQuery: () => ({ data: undefined }),
+  useSimilarExercisesQuery: () => ({ data: undefined }),
 }))
 
 import { ExercisePicker } from './exercise-picker'
@@ -27,7 +30,7 @@ function renderPicker(ui: ReactElement) {
   return render(<MemoryRouter>{ui}</MemoryRouter>)
 }
 
-const benchPress = { id: 'ex-1', name: 'Bench Press', category: 'chest', body_part: 'chest', equipment: 'barbell', target: null, muscle_group: 'chest', secondary_muscles: null, image: null, gif_url: null, instructions: null, instruction_steps: null }
+const benchPress = { id: 'ex-1', name: 'Bench Press', category: 'chest', body_part: 'chest', equipment: 'barbell', target: 'pectorals', muscle_group: 'traps', secondary_muscles: null, image: null, gif_url: null, instructions: null, instruction_steps: null }
 const inclinePress = { id: 'ex-2', name: 'Incline Press', category: 'chest', body_part: 'chest', equipment: 'barbell', target: null, muscle_group: 'chest', secondary_muscles: null, image: null, gif_url: null, instructions: null, instruction_steps: null }
 
 // jsdom has no `IntersectionObserver` — this stand-in captures each
@@ -49,7 +52,7 @@ class MockIntersectionObserver implements Pick<IntersectionObserver, 'observe' |
 
 function defaultSearchResult() {
   return {
-    data: { pages: [[benchPress]] },
+    data: { pages: [{ exercises: [benchPress], hasMore: false }] },
     isLoading: false,
     fetchNextPage: vi.fn(),
     hasNextPage: false,
@@ -142,12 +145,20 @@ describe('ExercisePicker', () => {
         open
         onClose={vi.fn()}
         onSelect={vi.fn()}
-        relatedTo={{ muscleGroup: 'chest', excludeId: 'ex-1' }}
+        relatedTo={{ target: 'pectorals', excludeId: 'ex-1' }}
       />,
     )
 
-    expect(screen.getByText('Relacionados · Pecho')).toBeInTheDocument()
+    expect(screen.getByText('Relacionados · Pectorales')).toBeInTheDocument()
+    expect(useRelatedExercisesQuery).toHaveBeenLastCalledWith('pectorals', 'ex-1')
     expect(screen.getByText('Incline Press')).toBeInTheDocument()
+  })
+
+  it('labels result rows with the target muscle, never muscle_group', () => {
+    renderPicker(<ExercisePicker open onClose={vi.fn()} onSelect={vi.fn()} />)
+
+    expect(screen.getByText('Pectorales · Barra')).toBeInTheDocument()
+    expect(screen.queryByText(/Trapecio/)).not.toBeInTheDocument()
   })
 
   it('does not show a related section without relatedTo', () => {

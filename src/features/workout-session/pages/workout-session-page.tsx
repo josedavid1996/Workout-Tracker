@@ -11,10 +11,10 @@ import { cx } from '../../../shared/lib/cx'
 import { Button } from '../../../shared/ui/button'
 import { Input } from '../../../shared/ui/input'
 import type { Exercise } from '../../exercises/api/exercises'
-import { useExercisesByIdsQuery } from '../../exercises/api/use-exercises'
+import { useExerciseFocusQuery, useExercisesByIdsQuery } from '../../exercises/api/use-exercises'
 import { ExerciseThumbnail } from '../../exercises/components/exercise-thumbnail'
 import { QuickReferenceSheet } from '../../exercises/components/quick-reference-sheet'
-import { muscleLabel } from '../../exercises/lib/exercise-labels'
+import { primaryMuscleLabel } from '../../exercises/lib/exercise-labels'
 import { IconButton } from '../../../shared/ui/icon-button'
 import { useRoutineQuery } from '../../routines/api/use-routines'
 import {
@@ -31,6 +31,8 @@ import type { SetEntry, WorkoutExerciseWithSets } from '../api/workout-session'
 import { ExercisePicker } from '../components/exercise-picker/exercise-picker'
 import { PlateCalculator } from '../components/plate-calculator/plate-calculator'
 import { TagOverlay } from '../components/tag-overlay/tag-overlay'
+import type { NewSetDefaults } from '../lib/new-set-defaults'
+import { newSetDefaults, parseWeightInput } from '../lib/new-set-defaults'
 import { reorderByRememberedIds } from '../lib/reorder-by-remembered-ids'
 
 interface CurrentExercisePanelProps {
@@ -43,10 +45,13 @@ interface CurrentExercisePanelProps {
   onToggleSkip: () => void
   onOpenTagOverlay: (set: SetEntry) => void
   onOpenPlateCalculator: (weight: number) => void
-  onLogSet: (weight: number) => void
+  // Sets whose weight is still unknown (added without any prefill, or
+  // cleared by the user) — shown empty and not completable until filled.
+  weightMissingSetIds: Set<string>
+  onLogSet: (defaults: NewSetDefaults) => void
   onCompleteSet: (set: SetEntry) => void
   onRetryComplete: (set: SetEntry) => void
-  onChangeWeight: (id: string, weight: number) => void
+  onChangeWeight: (id: string, weight: number | null) => void
   onChangeReps: (id: string, reps: number) => void
 }
 
@@ -64,6 +69,7 @@ function CurrentExercisePanel({
   planned,
   skipped,
   erroredSetIds,
+  weightMissingSetIds,
   onToggleSkip,
   onOpenTagOverlay,
   onOpenPlateCalculator,
@@ -76,9 +82,35 @@ function CurrentExercisePanel({
   const lastWeightQuery = useLastLoggedWeightQuery(workoutExercise.exercise_id, workoutId)
   const lastWeight = lastWeightQuery.data ?? null
   const [quickReferenceOpen, setQuickReferenceOpen] = useState(false)
+  // Raw text typed in the current set's weight input, so the field shows
+  // exactly what was typed (including empty) while the update round-trips.
+  const [weightDrafts, setWeightDrafts] = useState<Record<string, string>>({})
+  const focusQuery = useExerciseFocusQuery(exerciseInfo?.id)
+  const muscleText = exerciseInfo ? primaryMuscleLabel(focusQuery.data?.focus, exerciseInfo.target) : ''
 
   const sets = workoutExercise.set_entries
   const currentSetIndex = sets.findIndex((set) => !set.completed)
+  const currentSet = currentSetIndex >= 0 ? sets[currentSetIndex] : undefined
+  const currentWeightMissing = currentSet ? weightMissingSetIds.has(currentSet.id) : false
+
+  const weightInputValue = (set: SetEntry) =>
+    weightDrafts[set.id] ?? (weightMissingSetIds.has(set.id) ? '' : String(set.weight))
+
+  const handleWeightInput = (set: SetEntry, raw: string) => {
+    setWeightDrafts((current) => ({ ...current, [set.id]: raw }))
+    onChangeWeight(set.id, parseWeightInput(raw))
+  }
+
+  const handleAddSet = () => {
+    const previous = sets.at(-1)
+    onLogSet(
+      newSetDefaults({
+        previousSet: previous && !weightMissingSetIds.has(previous.id) ? previous : null,
+        lastWeight,
+        plannedReps: planned?.targetReps ?? null,
+      }),
+    )
+  }
 
   return (
     <div className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-4">
@@ -107,9 +139,9 @@ function CurrentExercisePanel({
           </div>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1.5">
-          {exerciseInfo?.muscle_group && (
+          {muscleText && (
             <span className="rounded-full bg-accent/15 px-2.5 py-1 font-mono text-[11px] uppercase tracking-wide text-data">
-              {muscleLabel(exerciseInfo.muscle_group)}
+              {muscleText}
             </span>
           )}
           <div className="flex items-center gap-1">
@@ -184,9 +216,11 @@ function CurrentExercisePanel({
                     <Input
                       aria-label="Peso (kg)"
                       type="number"
+                      inputMode="decimal"
                       min={0}
-                      value={set.weight}
-                      onChange={(event) => onChangeWeight(set.id, Number(event.target.value))}
+                      placeholder="kg"
+                      value={weightInputValue(set)}
+                      onChange={(event) => handleWeightInput(set, event.target.value)}
                       className="w-full bg-surface-2 px-2 py-1 text-sm"
                     />
                   ) : (
@@ -227,7 +261,7 @@ function CurrentExercisePanel({
           <div className="flex items-stretch overflow-hidden rounded-xl border border-dashed border-border">
             <button
               type="button"
-              onClick={() => onLogSet(lastWeight ?? 0)}
+              onClick={handleAddSet}
               className="flex flex-1 items-center justify-center gap-1.5 py-2 font-mono text-xs uppercase tracking-wide text-muted transition-colors hover:bg-surface-2"
             >
               <img src={iconPlus} alt="" className="h-3.5 w-3.5" />
@@ -263,9 +297,13 @@ function CurrentExercisePanel({
               ) : (
                 <>
                   <span className="font-mono text-xs uppercase tracking-wide text-muted">
-                    Set {currentSetIndex + 1} de {sets.length}
+                    {currentWeightMissing ? 'Ingresá el peso (0 si es corporal)' : `Set ${currentSetIndex + 1} de ${sets.length}`}
                   </span>
-                  <Button type="button" onClick={() => onCompleteSet(sets[currentSetIndex])}>
+                  <Button
+                    type="button"
+                    disabled={currentWeightMissing}
+                    onClick={() => onCompleteSet(sets[currentSetIndex])}
+                  >
                     Completar set
                   </Button>
                 </>
@@ -350,6 +388,11 @@ export function WorkoutSessionPage() {
   const [plateCalculatorWeight, setPlateCalculatorWeight] = useState<number | null>(null)
   const [skippedIds, setSkippedIds] = useState<Set<string>>(new Set())
   const [erroredSetIds, setErroredSetIds] = useState<Set<string>>(new Set())
+  // `set_entries.weight` is NOT NULL, so a set added without a known weight
+  // is stored as 0 but tracked here as "missing" — it shows empty and can't
+  // be completed until the user types a value (an explicit 0 is fine).
+  // Page-lifetime only: after a reload such a set shows its stored 0.
+  const [weightMissingSetIds, setWeightMissingSetIds] = useState<Set<string>>(new Set())
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false)
 
   // Derived, not stored: clamp defensively during render instead of via an
@@ -399,21 +442,49 @@ export function WorkoutSessionPage() {
     setErroredSetIds((current) => new Set(current).add(setId))
   }
 
-  function handleLogSet(weight: number) {
-    if (!currentExercise) return
-    logSetMutation.mutate({
-      workoutExerciseId: currentExercise.id,
-      workoutId,
-      exerciseId: currentExercise.exercise_id,
-      // `reps` defaults to 1, not 0 — `set_entries` requires `reps > 0` for
-      // every tag except `failure` (0005_failure_reps_zero.sql).
-      weight,
-      reps: 1,
-      tag: 'normal',
+  function setWeightMissing(setId: string, missing: boolean) {
+    setWeightMissingSetIds((current) => {
+      if (current.has(setId) === missing) return current
+      const next = new Set(current)
+      if (missing) next.add(setId)
+      else next.delete(setId)
+      return next
     })
   }
 
+  function handleLogSet({ weight, reps }: NewSetDefaults) {
+    if (!currentExercise) return
+    logSetMutation.mutate(
+      {
+        workoutExerciseId: currentExercise.id,
+        workoutId,
+        exerciseId: currentExercise.exercise_id,
+        // `reps` is always > 0 here — `set_entries` requires it for every tag
+        // except `failure` (0005_failure_reps_zero.sql).
+        weight: weight ?? 0,
+        reps,
+        tag: 'normal',
+      },
+      {
+        onSuccess: (created) => {
+          if (weight === null) setWeightMissing(created.id, true)
+        },
+      },
+    )
+  }
+
+  function handleChangeWeight(setId: string, weight: number | null) {
+    if (weight === null) {
+      setWeightMissing(setId, true)
+      return
+    }
+    setWeightMissing(setId, false)
+    updateSetMutation.mutate({ id: setId, patch: { weight } }, { onError: () => markError(setId) })
+  }
+
   function handleCompleteSet(set: SetEntry) {
+    // Never silently save an unknown weight as 0 (see `weightMissingSetIds`).
+    if (weightMissingSetIds.has(set.id)) return
     toggleCompletedMutation.mutate(
       { id: set.id, completed: true },
       {
@@ -509,15 +580,14 @@ export function WorkoutSessionPage() {
             planned={targetsByPosition.get(currentExercise.position)}
             skipped={skippedIds.has(currentExercise.id)}
             erroredSetIds={erroredSetIds}
+            weightMissingSetIds={weightMissingSetIds}
             onToggleSkip={() => toggleSkip(currentExercise.id)}
             onOpenTagOverlay={setTagOverlaySet}
             onOpenPlateCalculator={setPlateCalculatorWeight}
             onLogSet={handleLogSet}
             onCompleteSet={handleCompleteSet}
             onRetryComplete={handleRetryComplete}
-            onChangeWeight={(setId, weight) =>
-              updateSetMutation.mutate({ id: setId, patch: { weight } }, { onError: () => markError(setId) })
-            }
+            onChangeWeight={handleChangeWeight}
             onChangeReps={(setId, reps) =>
               updateSetMutation.mutate({ id: setId, patch: { reps } }, { onError: () => markError(setId) })
             }

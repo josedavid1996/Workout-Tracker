@@ -3,7 +3,7 @@
 Read-only catalog feature over the pre-existing `exercises` table (Phase 7,
 PR4), plus the exercise detail/progress view (Phase 9, PR5).
 
-- `api/exercises.ts` — `searchExercises(filters)`, `fetchRelatedExercises(muscleGroup, excludeId)`,
+- `api/exercises.ts` — `searchExercises(filters, page)` (→ `{ exercises, hasMore }`, exact name matches pinned first on page 0), `fetchRelatedExercises(target, excludeId)`,
   `fetchExerciseById(id)` and `fetchExercisesByIds(ids)` (PR5 additions, backing
   the detail page title and a finished workout's per-exercise name display).
   Unit tested against a mocked query-builder (`exercises.test.ts`).

@@ -17,6 +17,7 @@ credentials.
 | `0008_routine_exercise_notes.sql` | Adds `routine_exercises.notes` (nullable text) — a short per-exercise note (e.g. "bajar peso", "cuidado el hombro"), set from the routine form and shown in the weekly preview. **Applied**. |
 | `0009_routine_day_and_linked_exercises.sql` | Adds `routines.day_of_week` (nullable smallint, 0=Monday..6=Sunday, backfilled from the existing name-based convention) and `routine_exercises.linked_to_previous` (boolean, marks a superset/bi-serie with the exercise right before it). **Applied**. |
 | `0010_drop_linked_to_previous.sql` | Drops `routine_exercises.linked_to_previous` — the superset/bi-serie feature from 0009 is rolled back for now; the user wants to reconsider the right approach before rebuilding it. `day_of_week` is unaffected. **Not yet applied** — same caveat as 0001–0008 (no service-role credentials in this environment). |
+| `0011_exercise_focus.sql` | New shared read-only catalog table `exercise_focus` (`exercise_id` → `exercises.id`, `focus` — one of 32 muscle-region keys, `confidence` `high`/`medium`/`low`, `is_stretch`) plus its seed. Tags the specific region an exercise emphasizes (e.g. lateral vs posterior deltoid) without touching the pre-existing `exercises` table. No `user_id`: RLS select-only policy for `authenticated`, no write policies. Backs the focus chip and "Ejercicios similares" in the Quick Reference sheet — the app degrades to target-based suggestions until it is applied. **Not yet applied** — same caveat. |
 
 ## Applying
 

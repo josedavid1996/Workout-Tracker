@@ -28,12 +28,13 @@ export function RoutineWeeklyPreviewPage() {
   )
   const exercisesQuery = useExercisesByIdsQuery(allExerciseIds)
   const exercisesById = useMemo(() => {
-    const map = new Map<string, { name: string; image: string | null; muscleGroup: string | null; equipment: string | null }>()
+    const map = new Map<string, { name: string; image: string | null; target: string | null; equipment: string | null }>()
     for (const exercise of exercisesQuery.data ?? [])
       map.set(exercise.id, {
         name: exercise.name,
         image: exercise.image,
-        muscleGroup: exercise.muscle_group,
+        // `target`, not the unreliable `muscle_group` catalog column.
+        target: exercise.target,
         equipment: exercise.equipment,
       })
     return map
@@ -111,7 +112,7 @@ export function RoutineWeeklyPreviewPage() {
                                 </span>
                               </div>
                               <span className="font-mono text-xs text-muted">
-                                {[muscleLabel(details?.muscleGroup), equipmentLabel(details?.equipment)].filter(Boolean).join(' · ') || '—'}
+                                {[muscleLabel(details?.target), equipmentLabel(details?.equipment)].filter(Boolean).join(' · ') || '—'}
                               </span>
                               {exercise.notes && <span className="text-xs text-muted">{exercise.notes}</span>}
                             </div>

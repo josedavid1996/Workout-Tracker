@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { daysSince } from '../../../shared/lib/days-since'
+import { lastUsedLabel } from '../../../shared/lib/last-used-label'
 import { initials } from '../../../shared/lib/initials'
 import { resolveDisplayName } from '../../../shared/lib/resolve-display-name'
 import { BottomNav } from '../../../shared/ui/bottom-nav'
@@ -170,9 +171,7 @@ function FeaturedRoutineCard({
   // duration; otherwise fall back to the documented per-exercise estimate
   // (`routine-summary.ts`) — never a fabricated number either way.
   const minutesLabel = historyItem ? historyItem.duration : `~${estimateWorkoutMinutes(exerciseCount)} min`
-  const lastUsedLabel = historyItem
-    ? `Última vez hace ${daysSince(historyItem.createdAt)} días`
-    : 'Todavía no entrenaste esta rutina'
+  const lastUsedText = lastUsedLabel(historyItem ? daysSince(historyItem.createdAt) : null)
 
   return (
     <div className="relative overflow-hidden rounded-2xl border border-border bg-surface p-4">
@@ -189,7 +188,7 @@ function FeaturedRoutineCard({
         <span className="font-mono text-xs text-muted">
           {exerciseCount} ejercicios · {minutesLabel}
         </span>
-        <span className="text-xs text-muted">{lastUsedLabel}</span>
+        <span className="text-xs text-muted">{lastUsedText}</span>
         <Link to="/workout/start">
           <Button className="mt-1 flex w-full items-center justify-center gap-2">
             <img src={iconPlay} alt="" className="h-4 w-4" />

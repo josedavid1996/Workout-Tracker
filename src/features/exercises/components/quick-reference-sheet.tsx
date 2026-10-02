@@ -1,13 +1,15 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { Exercise } from '../api/exercises'
-import { useExerciseQuery } from '../api/use-exercises'
+import { useExerciseFocusQuery, useExerciseQuery, useSimilarExercisesQuery } from '../api/use-exercises'
 import { equipmentCategoryLabel, equipmentToCategory } from '../lib/equipment-category'
 import { EQUIPMENT_CATEGORY_ICONS } from '../lib/equipment-icons'
-import { muscleLabel } from '../lib/exercise-labels'
+import { focusLabel, muscleLabel, uniqueMuscleLabels } from '../lib/exercise-labels'
 import { getSpanishInstructionSteps } from '../lib/get-spanish-instruction-steps'
 import { Sheet } from '../../../shared/ui/sheet'
 import { Chip } from '../../../shared/ui/chip'
 import { Button } from '../../../shared/ui/button'
+import { ExerciseThumbnail } from './exercise-thumbnail'
 
 interface QuickReferenceSheetProps {
   // Fetched internally via `useExerciseQuery` when `exercise` is not given —
@@ -22,6 +24,13 @@ interface QuickReferenceSheetProps {
   exercise?: Exercise
   open: boolean
   onClose: () => void
+  // Set when the sheet is opened from a screen holding unsaved state (the
+  // exercise picker inside the routine form / session): tapping a similar
+  // exercise swaps the sheet content in place (with "← Volver" back to the
+  // previous one) instead of navigating away, and "Ver detalle completo"
+  // is hidden. Without it (e.g. the active session page, which persists on
+  // reload) both navigate to `/exercises/:id`.
+  inline?: boolean
 }
 
 // Bottom sheet for "Fase 3 · Quick Reference" (Figma node `16:1626`):
@@ -30,33 +39,69 @@ interface QuickReferenceSheetProps {
 // session). Deliberately text/chip-only — no anatomical body-silhouette
 // highlighting (would need new per-muscle-group artwork that doesn't exist
 // and isn't proportional to a personal-use app's scope, see PR10 plan).
-export function QuickReferenceSheet({ exerciseId, exercise: exerciseProp, open, onClose }: QuickReferenceSheetProps) {
+export function QuickReferenceSheet({
+  exerciseId,
+  exercise: exerciseProp,
+  open,
+  onClose,
+  inline = false,
+}: QuickReferenceSheetProps) {
   const navigate = useNavigate()
+  // Inline mode only: similar exercises opened in place, most recent last.
+  const [openedSimilar, setOpenedSimilar] = useState<Exercise[]>([])
   const shouldFetch = open && !exerciseProp
   const exerciseQuery = useExerciseQuery(shouldFetch ? exerciseId : undefined)
-  const exercise = exerciseProp ?? exerciseQuery.data
+  const exercise = openedSimilar.at(-1) ?? exerciseProp ?? exerciseQuery.data
+  // Both only fetch while the sheet is open (and once the exercise is known).
+  const focusQuery = useExerciseFocusQuery(open ? exercise?.id : undefined)
+  const similarQuery = useSimilarExercisesQuery(open ? (exercise ?? undefined) : undefined)
+  const focus = focusQuery.data?.focus
+  const similar = similarQuery.data ?? []
 
   if (!open) return null
 
   const isLoading = !exercise && shouldFetch && exerciseQuery.isLoading
 
-  const handleViewDetail = () => {
+  const handleClose = () => {
+    setOpenedSimilar([])
     onClose()
+  }
+
+  const handleViewDetail = () => {
+    handleClose()
     navigate(`/exercises/${exerciseId}`)
   }
 
+  const handleOpenSimilar = (item: Exercise) => {
+    if (inline) {
+      setOpenedSimilar((current) => [...current, item])
+      return
+    }
+    handleClose()
+    navigate(`/exercises/${item.id}`)
+  }
+
+  const handleBack = () => setOpenedSimilar((current) => current.slice(0, -1))
+
   return (
-    <Sheet open={open} onClose={onClose} title={exercise?.name ?? 'Ejercicio'}>
+    <Sheet open={open} onClose={handleClose} title={exercise?.name ?? 'Ejercicio'}>
       {isLoading && <p className="text-sm text-muted">Cargando…</p>}
 
       {!isLoading && !exercise && <p className="text-sm text-muted">No se encontró el ejercicio.</p>}
 
       {exercise && (
         <div className="flex flex-col gap-4">
+          {openedSimilar.length > 0 && (
+            <Button type="button" variant="ghost" size="sm" onClick={handleBack} className="self-start">
+              ← Volver
+            </Button>
+          )}
+
           <div className="flex flex-wrap gap-1.5">
             <Chip icon={<img src={EQUIPMENT_CATEGORY_ICONS[equipmentToCategory(exercise.equipment)]} alt="" className="h-3.5 w-3.5" />}>
               {equipmentCategoryLabel(equipmentToCategory(exercise.equipment))}
             </Chip>
+            {focus && <Chip active>{focusLabel(focus)}</Chip>}
           </div>
 
           {(exercise.gif_url || exercise.image) && (
@@ -72,9 +117,12 @@ export function QuickReferenceSheet({ exerciseId, exercise: exerciseProp, open, 
             <div className="flex flex-col gap-1.5">
               <span className="font-mono text-xs uppercase tracking-wide text-muted">Músculos</span>
               <div className="flex flex-wrap gap-1.5">
-                {exercise.target && <Chip active>{muscleLabel(exercise.target)}</Chip>}
-                {(exercise.secondary_muscles ?? []).map((muscle) => (
-                  <Chip key={muscle}>{muscleLabel(muscle)}</Chip>
+                {/* Deduped by displayed label: synonyms (e.g. `traps` target +
+                    `trapezius` secondary) render as one chip. */}
+                {uniqueMuscleLabels([exercise.target, ...(exercise.secondary_muscles ?? [])]).map((label) => (
+                  <Chip key={label} active={label === muscleLabel(exercise.target)}>
+                    {label}
+                  </Chip>
                 ))}
               </div>
             </div>
@@ -98,9 +146,40 @@ export function QuickReferenceSheet({ exerciseId, exercise: exerciseProp, open, 
             })()}
           </div>
 
-          <Button type="button" variant="secondary" onClick={handleViewDetail}>
-            Ver detalle completo
-          </Button>
+          {similar.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              <span className="font-mono text-xs uppercase tracking-wide text-muted">Ejercicios similares</span>
+              <ul className="flex flex-col gap-1">
+                {similar.map(({ exercise: item, focus: itemFocus }) => (
+                  <li key={item.id}>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenSimilar(item)}
+                      className="flex w-full items-center gap-3 rounded-lg p-1.5 text-left transition-colors hover:bg-surface-2"
+                    >
+                      <ExerciseThumbnail
+                        src={item.image}
+                        alt=""
+                        className="h-10 w-10 shrink-0 rounded-md border border-border bg-surface-2"
+                      />
+                      <span className="flex min-w-0 flex-1 flex-col">
+                        <span className="truncate text-sm text-foreground">{item.name}</span>
+                        <span className="truncate text-xs text-muted">
+                          {itemFocus ? focusLabel(itemFocus) : muscleLabel(item.target)}
+                        </span>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {!inline && (
+            <Button type="button" variant="secondary" onClick={handleViewDetail}>
+              Ver detalle completo
+            </Button>
+          )}
         </div>
       )}
     </Sheet>

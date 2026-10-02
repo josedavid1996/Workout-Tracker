@@ -13,3 +13,4 @@
 ## Supabase
 - Never modify the pre-existing `exercises` table or its schema.
 - RLS is the only authorization boundary (no server layer) — every new table needs a `user_id` + owner policy.
+- Exception: shared read-only catalog tables (like `exercise_focus`) have no `user_id`; they get a select-only policy for `authenticated` and no write policies.

@@ -18,9 +18,9 @@ import { Skeleton } from '../../../shared/ui/skeleton'
 import { toCountableSet } from '../../workout-session/lib/to-countable-set'
 import { ExerciseThumbnail } from '../components/exercise-thumbnail'
 import { useExerciseSetHistoryQuery } from '../api/use-exercise-history'
-import { useExerciseQuery } from '../api/use-exercises'
+import { useExerciseFocusQuery, useExerciseQuery } from '../api/use-exercises'
 import { computeEightWeekDelta } from '../lib/eight-week-delta'
-import { equipmentLabel, muscleLabel } from '../lib/exercise-labels'
+import { equipmentLabel, primaryMuscleLabel } from '../lib/exercise-labels'
 import { toChartPoints } from '../lib/to-chart-points'
 
 type ChartMetric = 'weight' | 'volume' | 'reps'
@@ -62,6 +62,7 @@ export function ExerciseDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const exerciseQuery = useExerciseQuery(id)
+  const focusQuery = useExerciseFocusQuery(id)
   const historyQuery = useExerciseSetHistoryQuery(id)
 
   const [chartMetric, setChartMetric] = useState<ChartMetric>('weight')
@@ -128,7 +129,7 @@ export function ExerciseDetailPage() {
         </h1>
         {exerciseQuery.data && (
           <span className="font-mono text-xs text-muted">
-            {[muscleLabel(exerciseQuery.data.muscle_group), equipmentLabel(exerciseQuery.data.equipment)].filter(Boolean).join(' · ')}
+            {[primaryMuscleLabel(focusQuery.data?.focus, exerciseQuery.data.target), equipmentLabel(exerciseQuery.data.equipment)].filter(Boolean).join(' · ')}
           </span>
         )}
 

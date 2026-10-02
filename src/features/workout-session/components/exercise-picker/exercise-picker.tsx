@@ -33,7 +33,7 @@ interface ExercisePickerProps {
   // Present when the picker is opened from the context of an exercise
   // already chosen elsewhere (e.g. "swap exercise") — enables the
   // "related" suggestions section.
-  relatedTo?: { muscleGroup: string; excludeId: string }
+  relatedTo?: { target: string; excludeId: string }
 }
 
 function ExerciseResultItem({
@@ -68,7 +68,9 @@ function ExerciseResultItem({
           <span className="text-foreground">{exercise.name}</span>
           {!compact && (
             <span className="font-mono text-xs text-muted">
-              {[muscleLabel(exercise.muscle_group), equipmentLabel(exercise.equipment)].filter(Boolean).join(' · ') || '—'}
+              {/* `target`, not the unreliable `muscle_group` column; no per-row
+                  focus lookup (would be an N+1 query per result). */}
+              {[muscleLabel(exercise.target), equipmentLabel(exercise.equipment)].filter(Boolean).join(' · ') || '—'}
             </span>
           )}
         </div>
@@ -87,11 +89,14 @@ function ExerciseResultItem({
       >
         ?
       </IconButton>
+      {/* `inline`: the picker sits on top of unsaved state (routine form,
+          session), so the sheet must never navigate away from it. */}
       <QuickReferenceSheet
         exerciseId={exercise.id}
         exercise={exercise}
         open={quickReferenceOpen}
         onClose={() => setQuickReferenceOpen(false)}
+        inline
       />
     </li>
   )
@@ -119,7 +124,7 @@ export function ExercisePicker({ open, onClose, onSelect, relatedTo }: ExerciseP
     bodyPart,
     equipment: equipmentCategory ? rawEquipmentValuesForCategory(equipmentCategory) : undefined,
   })
-  const relatedQuery = useRelatedExercisesQuery(relatedTo?.muscleGroup, relatedTo?.excludeId)
+  const relatedQuery = useRelatedExercisesQuery(relatedTo?.target, relatedTo?.excludeId)
 
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
   const loadMoreSentinelRef = useRef<HTMLLIElement | null>(null)
@@ -158,7 +163,7 @@ export function ExercisePicker({ open, onClose, onSelect, relatedTo }: ExerciseP
 
   if (!open) return null
 
-  const results = searchQuery.data?.pages.flat() ?? []
+  const results = searchQuery.data?.pages.flatMap((page) => page.exercises) ?? []
   const related = (relatedQuery.data as Exercise[] | undefined) ?? []
 
   return (
@@ -234,7 +239,7 @@ export function ExercisePicker({ open, onClose, onSelect, relatedTo }: ExerciseP
         {relatedTo && related.length > 0 && (
           <div className="flex flex-col gap-1 rounded-lg bg-[#182236] px-3 py-2">
             <span className="font-mono text-xs uppercase tracking-wide text-muted">
-              Relacionados · {muscleLabel(relatedTo.muscleGroup)}
+              Relacionados · {muscleLabel(relatedTo.target)}
             </span>
             <span className="font-mono text-[10px] text-muted">Limit 6</span>
             <ul className="flex flex-col divide-y divide-border/50">
