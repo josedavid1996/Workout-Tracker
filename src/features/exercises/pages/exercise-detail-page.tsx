@@ -20,6 +20,7 @@ import { ExerciseThumbnail } from '../components/exercise-thumbnail'
 import { useExerciseSetHistoryQuery } from '../api/use-exercise-history'
 import { useExerciseQuery } from '../api/use-exercises'
 import { computeEightWeekDelta } from '../lib/eight-week-delta'
+import { equipmentLabel, muscleLabel } from '../lib/exercise-labels'
 import { toChartPoints } from '../lib/to-chart-points'
 
 type ChartMetric = 'weight' | 'volume' | 'reps'
@@ -127,7 +128,7 @@ export function ExerciseDetailPage() {
         </h1>
         {exerciseQuery.data && (
           <span className="font-mono text-xs text-muted">
-            {[exerciseQuery.data.muscle_group, exerciseQuery.data.equipment].filter(Boolean).join(' · ')}
+            {[muscleLabel(exerciseQuery.data.muscle_group), equipmentLabel(exerciseQuery.data.equipment)].filter(Boolean).join(' · ')}
           </span>
         )}
 

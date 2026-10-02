@@ -102,7 +102,7 @@ describe('ExercisePicker', () => {
     // (see `exercise-filter-options.ts`), so `within` scopes the query to
     // the "Categoría" section specifically.
     const categorySection = screen.getByText('Categoría').closest('div') as HTMLElement
-    const chip = within(categorySection).getByRole('button', { name: 'chest' })
+    const chip = within(categorySection).getByRole('button', { name: 'Pecho' })
     fireEvent.click(chip)
     expect(useExerciseSearchQuery).toHaveBeenLastCalledWith(expect.objectContaining({ category: 'chest' }))
 
@@ -146,7 +146,7 @@ describe('ExercisePicker', () => {
       />,
     )
 
-    expect(screen.getByText(/relacionados/i)).toBeInTheDocument()
+    expect(screen.getByText('Relacionados · Pecho')).toBeInTheDocument()
     expect(screen.getByText('Incline Press')).toBeInTheDocument()
   })
 

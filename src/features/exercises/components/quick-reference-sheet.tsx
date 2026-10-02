@@ -3,6 +3,7 @@ import type { Exercise } from '../api/exercises'
 import { useExerciseQuery } from '../api/use-exercises'
 import { equipmentCategoryLabel, equipmentToCategory } from '../lib/equipment-category'
 import { EQUIPMENT_CATEGORY_ICONS } from '../lib/equipment-icons'
+import { muscleLabel } from '../lib/exercise-labels'
 import { getSpanishInstructionSteps } from '../lib/get-spanish-instruction-steps'
 import { Sheet } from '../../../shared/ui/sheet'
 import { Chip } from '../../../shared/ui/chip'
@@ -71,9 +72,9 @@ export function QuickReferenceSheet({ exerciseId, exercise: exerciseProp, open, 
             <div className="flex flex-col gap-1.5">
               <span className="font-mono text-xs uppercase tracking-wide text-muted">Músculos</span>
               <div className="flex flex-wrap gap-1.5">
-                {exercise.target && <Chip active>{exercise.target}</Chip>}
+                {exercise.target && <Chip active>{muscleLabel(exercise.target)}</Chip>}
                 {(exercise.secondary_muscles ?? []).map((muscle) => (
-                  <Chip key={muscle}>{muscle}</Chip>
+                  <Chip key={muscle}>{muscleLabel(muscle)}</Chip>
                 ))}
               </div>
             </div>

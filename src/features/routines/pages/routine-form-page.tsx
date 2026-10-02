@@ -18,6 +18,7 @@ import { Input } from '../../../shared/ui/input'
 import { Sheet } from '../../../shared/ui/sheet'
 import type { Exercise } from '../../exercises/api/exercises'
 import { useExercisesByIdsQuery } from '../../exercises/api/use-exercises'
+import { muscleLabel } from '../../exercises/lib/exercise-labels'
 import { ExercisePicker } from '../../workout-session/components/exercise-picker/exercise-picker'
 import type { RoutineExerciseDraft } from '../api/routine-exercises-payload'
 import { useCreateRoutineMutation, useRoutineQuery, useUpdateRoutineMutation } from '../api/use-routines'
@@ -226,7 +227,7 @@ export function RoutineFormPage() {
                 key={muscleGroup}
                 className="rounded-full border border-accent/30 bg-accent/10 px-2.5 py-1 text-xs text-data"
               >
-                {muscleGroup}
+                {muscleLabel(muscleGroup)}
               </span>
             ))}
           </div>

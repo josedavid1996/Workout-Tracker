@@ -14,6 +14,7 @@ import type { Exercise } from '../../exercises/api/exercises'
 import { useExercisesByIdsQuery } from '../../exercises/api/use-exercises'
 import { ExerciseThumbnail } from '../../exercises/components/exercise-thumbnail'
 import { QuickReferenceSheet } from '../../exercises/components/quick-reference-sheet'
+import { muscleLabel } from '../../exercises/lib/exercise-labels'
 import { IconButton } from '../../../shared/ui/icon-button'
 import { useRoutineQuery } from '../../routines/api/use-routines'
 import {
@@ -108,7 +109,7 @@ function CurrentExercisePanel({
         <div className="flex shrink-0 flex-col items-end gap-1.5">
           {exerciseInfo?.muscle_group && (
             <span className="rounded-full bg-accent/15 px-2.5 py-1 font-mono text-[11px] uppercase tracking-wide text-data">
-              {exerciseInfo.muscle_group}
+              {muscleLabel(exerciseInfo.muscle_group)}
             </span>
           )}
           <div className="flex items-center gap-1">

@@ -8,6 +8,7 @@ import {
   rawEquipmentValuesForCategory,
 } from '../../../exercises/lib/equipment-category'
 import { EQUIPMENT_CATEGORY_ICONS } from '../../../exercises/lib/equipment-icons'
+import { bodyPartLabel, equipmentLabel, muscleLabel } from '../../../exercises/lib/exercise-labels'
 import { ExerciseThumbnail } from '../../../exercises/components/exercise-thumbnail'
 import { QuickReferenceSheet } from '../../../exercises/components/quick-reference-sheet'
 import { Input } from '../../../../shared/ui/input'
@@ -67,7 +68,7 @@ function ExerciseResultItem({
           <span className="text-foreground">{exercise.name}</span>
           {!compact && (
             <span className="font-mono text-xs text-muted">
-              {[exercise.muscle_group, exercise.equipment].filter(Boolean).join(' · ') || '—'}
+              {[muscleLabel(exercise.muscle_group), equipmentLabel(exercise.equipment)].filter(Boolean).join(' · ') || '—'}
             </span>
           )}
         </div>
@@ -185,7 +186,7 @@ export function ExercisePicker({ open, onClose, onSelect, relatedTo }: ExerciseP
                 active={category === option}
                 onClick={() => setCategory(category === option ? undefined : option)}
               >
-                {option}
+                {bodyPartLabel(option)}
               </Chip>
             ))}
           </div>
@@ -202,7 +203,7 @@ export function ExercisePicker({ open, onClose, onSelect, relatedTo }: ExerciseP
                 active={bodyPart === option}
                 onClick={() => setBodyPart(bodyPart === option ? undefined : option)}
               >
-                {option}
+                {bodyPartLabel(option)}
               </Chip>
             ))}
           </div>
@@ -233,7 +234,7 @@ export function ExercisePicker({ open, onClose, onSelect, relatedTo }: ExerciseP
         {relatedTo && related.length > 0 && (
           <div className="flex flex-col gap-1 rounded-lg bg-[#182236] px-3 py-2">
             <span className="font-mono text-xs uppercase tracking-wide text-muted">
-              Relacionados · {relatedTo.muscleGroup}
+              Relacionados · {muscleLabel(relatedTo.muscleGroup)}
             </span>
             <span className="font-mono text-[10px] text-muted">Limit 6</span>
             <ul className="flex flex-col divide-y divide-border/50">

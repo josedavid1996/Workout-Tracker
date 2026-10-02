@@ -5,6 +5,7 @@ import { BottomNav } from '../../../shared/ui/bottom-nav'
 import { IconButton } from '../../../shared/ui/icon-button'
 import { ExerciseThumbnail } from '../../exercises/components/exercise-thumbnail'
 import { useExercisesByIdsQuery } from '../../exercises/api/use-exercises'
+import { equipmentLabel, muscleLabel } from '../../exercises/lib/exercise-labels'
 import { useRoutinesWithExercisesQuery } from '../api/use-routines'
 import { groupRoutinesByDay } from '../lib/group-routines-by-day'
 
@@ -110,7 +111,7 @@ export function RoutineWeeklyPreviewPage() {
                                 </span>
                               </div>
                               <span className="font-mono text-xs text-muted">
-                                {[details?.muscleGroup, details?.equipment].filter(Boolean).join(' · ') || '—'}
+                                {[muscleLabel(details?.muscleGroup), equipmentLabel(details?.equipment)].filter(Boolean).join(' · ') || '—'}
                               </span>
                               {exercise.notes && <span className="text-xs text-muted">{exercise.notes}</span>}
                             </div>

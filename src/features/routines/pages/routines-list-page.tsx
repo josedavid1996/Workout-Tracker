@@ -11,6 +11,7 @@ import { Chip } from '../../../shared/ui/chip'
 import { IconButton } from '../../../shared/ui/icon-button'
 import { Input } from '../../../shared/ui/input'
 import { useExercisesByIdsQuery } from '../../exercises/api/use-exercises'
+import { bodyPartLabel } from '../../exercises/lib/exercise-labels'
 import { useWorkoutHistoryQuery } from '../../history/api/use-history'
 import { daysSince } from '../../../shared/lib/days-since'
 import type { RoutineListCardData } from '../components/routine-list-card'
@@ -177,7 +178,7 @@ export function RoutinesListPage() {
                     active={activeBodyPart === bodyPart}
                     onClick={() => setActiveBodyPart(bodyPart)}
                   >
-                    {bodyPart}
+                    {bodyPartLabel(bodyPart)}
                   </Chip>
                 ))}
               </div>
