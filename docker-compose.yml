@@ -3,8 +3,12 @@ services:
     build:
       context: .
       args:
-        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+        # Empty on purpose: the bundle then uses its own origin and nginx
+        # proxies the Supabase paths (see nginx.conf).
+        VITE_SUPABASE_URL: ''
         VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
     ports:
       - '8080:80'
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
     restart: unless-stopped

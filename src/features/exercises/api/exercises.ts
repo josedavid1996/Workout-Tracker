@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { escapeLikePattern } from '../../../shared/lib/escape-like'
 import { supabase } from '../../../shared/supabase/client'
+import { resolveMediaUrl } from '../../../shared/supabase/media-url'
 import type { FocusCandidate, FocusConfidence, SimilarExercise } from '../lib/similar-exercises'
 import { DEFAULT_SIMILAR_LIMIT, pickSimilarExercises } from '../lib/similar-exercises'
 
@@ -37,6 +38,16 @@ export type Exercise = {
 
 const EXERCISE_COLUMNS =
   'id, name, category, body_part, equipment, target, muscle_group, secondary_muscles, image, gif_url, instructions, instruction_steps'
+
+// Every exercise row leaving this module goes through here — see
+// `shared/supabase/media-url.ts`.
+function withMediaUrls(exercise: Exercise): Exercise {
+  return { ...exercise, image: resolveMediaUrl(exercise.image), gif_url: resolveMediaUrl(exercise.gif_url) }
+}
+
+function toExercises(data: unknown): Exercise[] {
+  return ((data as Exercise[] | null | undefined) ?? []).map(withMediaUrls)
+}
 
 // Search results are paginated (`page` is 0-indexed) instead of a single
 // capped fetch — the catalog has 1300+ rows, so a one-shot `.limit()` (the
@@ -111,8 +122,8 @@ export async function searchExercises(filters: ExerciseFilters = {}, page = 0): 
   if (pagedResult.error) throw pagedResult.error
   if (exactResult?.error) throw exactResult.error
 
-  const paged = (pagedResult.data as Exercise[] | null) ?? []
-  const exact = (exactResult?.data as Exercise[] | null | undefined) ?? []
+  const paged = toExercises(pagedResult.data)
+  const exact = toExercises(exactResult?.data)
   const exactIds = new Set(exact.map((exercise) => exercise.id))
 
   return {
@@ -133,7 +144,7 @@ export async function fetchRelatedExercises(target: string, excludeId: string): 
     .limit(RELATED_LIMIT)
 
   if (error) throw error
-  return (data as Exercise[] | null) ?? []
+  return toExercises(data)
 }
 
 // Single exercise lookup — backs `features/exercises/pages/exercise-detail-page.tsx`
@@ -142,7 +153,7 @@ export async function fetchExerciseById(id: string): Promise<Exercise | null> {
   const { data, error } = await db.from('exercises').select(EXERCISE_COLUMNS).eq('id', id).maybeSingle()
 
   if (error) throw error
-  return (data as Exercise | null) ?? null
+  return data ? withMediaUrls(data as Exercise) : null
 }
 
 // Batch lookup by id — backs displaying exercise names for a workout's
@@ -154,7 +165,7 @@ export async function fetchExercisesByIds(ids: string[]): Promise<Exercise[]> {
   const { data, error } = await db.from('exercises').select(EXERCISE_COLUMNS).in('id', ids)
 
   if (error) throw error
-  return (data as Exercise[] | null) ?? []
+  return toExercises(data)
 }
 
 // `exercise_focus` (migration 0011) is a shared, read-only catalog table:
@@ -187,7 +198,7 @@ type FocusCandidateRow = ExerciseFocus & { exercises: Exercise | Exercise[] | nu
 function toFocusCandidate(row: FocusCandidateRow): FocusCandidate<Exercise> | null {
   const exercise = Array.isArray(row.exercises) ? row.exercises[0] : row.exercises
   if (!exercise) return null
-  return { exercise, focus: row.focus, confidence: row.confidence, is_stretch: row.is_stretch }
+  return { exercise: withMediaUrls(exercise), focus: row.focus, confidence: row.confidence, is_stretch: row.is_stretch }
 }
 
 async function fetchSameFocusCandidates(focus: string, excludeId: string): Promise<FocusCandidate<Exercise>[]> {
@@ -215,7 +226,7 @@ async function fetchSameTargetCandidates(target: string | null, excludeId: strin
     .limit(SIMILAR_CANDIDATE_LIMIT)
 
   if (error) throw error
-  return (data as Exercise[] | null) ?? []
+  return toExercises(data)
 }
 
 // Backs the Quick Reference sheet's "Ejercicios similares". Graceful
