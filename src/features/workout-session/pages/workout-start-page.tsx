@@ -43,7 +43,7 @@ export function WorkoutStartPage() {
   const hasRoutines = routines.length > 0
 
   return (
-    <div className="min-h-dvh bg-background px-4 pb-28 pt-6">
+    <div className="min-h-dvh bg-background px-4 pb-28 pt-[calc(1.5rem+env(safe-area-inset-top))]">
       <div className="mx-auto flex max-w-md flex-col gap-5">
         <h1 className="font-display text-3xl font-extrabold uppercase tracking-wide text-foreground">Iniciar</h1>
 

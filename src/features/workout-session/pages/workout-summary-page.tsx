@@ -72,7 +72,7 @@ export function WorkoutSummaryPage() {
 
   if (workoutQuery.isLoading || !workout) {
     return (
-      <div className="min-h-dvh bg-background px-4 py-6">
+      <div className="min-h-dvh bg-background px-4 pb-6 pt-[calc(1.5rem+env(safe-area-inset-top))]">
         <div className="mx-auto flex max-w-md flex-col gap-4">
           <div className="flex flex-col items-center gap-2 rounded-2xl bg-gradient-to-br from-surface-2 to-background p-6">
             <Skeleton className="h-12 w-12 rounded-full" />
@@ -135,7 +135,7 @@ export function WorkoutSummaryPage() {
 
   return (
     <div className="min-h-dvh bg-background pb-28">
-      <div className="relative overflow-hidden bg-gradient-to-br from-surface-2 to-background px-4 pt-8 pb-6">
+      <div className="relative overflow-hidden bg-gradient-to-br from-surface-2 to-background px-4 pt-[calc(2rem+env(safe-area-inset-top))] pb-6">
         <img src={iconDecorRings} alt="" className="pointer-events-none absolute -top-6 -right-6 h-28 w-28 opacity-20" />
         <div className="relative mx-auto flex max-w-md flex-col items-center gap-2 text-center">
           <span className="flex h-12 w-12 items-center justify-center rounded-full bg-positive/20">

@@ -82,7 +82,7 @@ export function HistoryPage() {
   const isLoading = historyQuery.isLoading
 
   return (
-    <div className="min-h-dvh bg-background px-4 pb-28 pt-6">
+    <div className="min-h-dvh bg-background px-4 pb-28 pt-[calc(1.5rem+env(safe-area-inset-top))]">
       <div className="mx-auto flex max-w-md flex-col gap-4">
         <div className="flex items-center justify-between">
           <h1 className="font-display text-2xl font-extrabold uppercase tracking-wide text-foreground">Historial</h1>

@@ -516,7 +516,7 @@ export function WorkoutSessionPage() {
 
   return (
     <div className="min-h-dvh bg-background pb-10">
-      <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-border bg-surface px-4 py-3">
+      <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-border bg-surface px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))]">
         <button type="button" aria-label="Cerrar" onClick={() => setCloseConfirmOpen(true)}>
           <img src={iconClose} alt="" className="h-5 w-5" />
         </button>

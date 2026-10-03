@@ -112,7 +112,7 @@ export function ExerciseDetailPage() {
 
   return (
     <div className="min-h-dvh bg-background pb-28">
-      <header className="flex flex-col items-center gap-1 border-b border-border px-4 py-4">
+      <header className="flex flex-col items-center gap-1 border-b border-border px-4 pb-4 pt-[calc(1rem+env(safe-area-inset-top))]">
         <div className="flex w-full items-center justify-between">
           <button
             type="button"

@@ -67,7 +67,7 @@ export function HomePage() {
   const isLoading = historyQuery.isLoading || routinesQuery.isLoading
 
   return (
-    <div className="min-h-dvh bg-background px-4 pb-28 pt-6">
+    <div className="min-h-dvh bg-background px-4 pb-28 pt-[calc(1.5rem+env(safe-area-inset-top))]">
       <div className="mx-auto flex max-w-md flex-col gap-4">
         <header className="flex items-center justify-between">
           <div className="flex flex-col gap-1">

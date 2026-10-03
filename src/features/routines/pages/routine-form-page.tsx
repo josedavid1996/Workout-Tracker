@@ -177,7 +177,7 @@ export function RoutineFormPage() {
           thing, so both were visible and tappable at once. The empty
           `h-9 w-9` span keeps the title visually centered against the
           "Volver" button on the other side, same slot size as `IconButton`. */}
-      <header className="flex items-center justify-between border-b border-border px-4 py-3">
+      <header className="flex items-center justify-between border-b border-border px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))]">
         <IconButton aria-label="Volver" onClick={() => navigate(-1)}>
           <img src={iconBack} alt="" className="h-4 w-4" />
         </IconButton>

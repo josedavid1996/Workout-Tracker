@@ -24,6 +24,15 @@
 }
 
 @layer base {
+  /* iOS standalone PWA with `black-translucent` + `viewport-fit=cover`
+     (see `index.html`) reports a viewport that is short by the status-bar
+     height, so `fixed bottom-0` elements (`BottomNav`) float above the
+     screen edge. Extending the root by the top inset closes that gap;
+     outside an installed iOS PWA the inset is 0 and this is a no-op. */
+  html {
+    min-height: calc(100% + env(safe-area-inset-top));
+  }
+
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
