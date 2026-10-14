@@ -3,6 +3,7 @@ import { supabase } from '../../../shared/supabase/client'
 import type { SetTag } from '../../../shared/lib/countable-set'
 import { getUserEquipment } from '../../equipment/api/equipment'
 import type { UserEquipment } from '../../equipment/api/equipment'
+import type { ExerciseSwapPlan } from '../lib/exercise-swap'
 import type { CountableSetRow, PreviousSet } from '../lib/prefill-sets'
 import { buildPrefilledSets, pickPreviousSessionSets } from '../lib/prefill-sets'
 
@@ -43,12 +44,14 @@ export type WorkoutDetail = Workout & { workout_exercises: WorkoutExerciseWithSe
 // Guidance-only target from the routine this workout was started from —
 // `workout_exercises` itself has no target_sets/target_reps columns, only
 // the copied `exercise_id`/`position`. Matched back to a workout_exercise by
-// `position` since both were populated from the same routine order.
+// `exercise_id` (positions can shift once exercises are added or swapped
+// mid-session).
 export type RoutineTarget = {
   exercise_id: string
   position: number
   target_sets: number | null
   target_reps: string | null
+  notes: string | null
 }
 
 // Re-exported for callers that already imported `UserEquipment` from here
@@ -208,7 +211,7 @@ export async function fetchWorkout(id: string): Promise<WorkoutDetail> {
 export async function fetchRoutineTargets(routineId: string): Promise<RoutineTarget[]> {
   const { data, error } = await db
     .from('routine_exercises')
-    .select('exercise_id, position, target_sets, target_reps')
+    .select('exercise_id, position, target_sets, target_reps, notes')
     .eq('routine_id', routineId)
     .order('position', { ascending: true })
 
@@ -216,9 +219,8 @@ export async function fetchRoutineTargets(routineId: string): Promise<RoutineTar
   return (data as RoutineTarget[] | null) ?? []
 }
 
-// Adding an exercise mid-session is only allowed for freestyle workouts
-// before any set has been logged (enforced by the calling page, not here —
-// this function only performs the insert once that decision is made).
+// Adds an exercise to an open workout, with as many pending set rows as it
+// had last time (none when it has no history — the user adds them).
 export async function addWorkoutExercise(
   workoutId: string,
   exerciseId: string,
@@ -233,7 +235,66 @@ export async function addWorkoutExercise(
     .single()
 
   if (error) throw error
-  return data as WorkoutExercise
+
+  const created = data as WorkoutExercise
+  await prefillSetRows(userId, workoutId, [
+    { workoutExerciseId: created.id, exerciseId, targetSets: null, targetReps: null },
+  ])
+  return created
+}
+
+// `set_entries` rows go with it (`on delete cascade`).
+export async function removeWorkoutExercise(workoutExerciseId: string): Promise<void> {
+  const { error } = await db.from('workout_exercises').delete().eq('id', workoutExerciseId)
+  if (error) throw error
+}
+
+export type ReplaceWorkoutExerciseParams = {
+  workoutId: string
+  workoutExerciseId: string
+  newExerciseId: string
+  // From `lib/exercise-swap.ts#planExerciseSwap`.
+  plan: ExerciseSwapPlan
+}
+
+// Swaps an exercise for another one following `plan`: either in place
+// (nothing was logged yet) or right after the original (its completed sets
+// are kept). The replacement gets the same number of pending set rows.
+export async function replaceWorkoutExercise({
+  workoutId,
+  workoutExerciseId,
+  newExerciseId,
+  plan,
+}: ReplaceWorkoutExerciseParams): Promise<WorkoutExercise> {
+  const userId = await requireUserId()
+
+  if (plan.removeOriginal) {
+    await removeWorkoutExercise(workoutExerciseId)
+  }
+
+  for (const shift of plan.shifts) {
+    const { error } = await db.from('workout_exercises').update({ position: shift.position }).eq('id', shift.id)
+    if (error) throw error
+  }
+
+  const { data, error } = await db
+    .from('workout_exercises')
+    .insert({ workout_id: workoutId, exercise_id: newExerciseId, position: plan.insertPosition, user_id: userId })
+    .select('id, workout_id, exercise_id, position')
+    .single()
+
+  if (error) throw error
+
+  const created = data as WorkoutExercise
+  await prefillSetRows(userId, workoutId, [
+    {
+      workoutExerciseId: created.id,
+      exerciseId: newExerciseId,
+      targetSets: plan.setCount,
+      targetReps: plan.reps === null ? null : String(plan.reps),
+    },
+  ])
+  return created
 }
 
 export type LogSetParams = {
@@ -280,6 +341,19 @@ export async function toggleCompleted(id: string, completed: boolean): Promise<v
     .update({ completed, completed_at: completed ? new Date().toISOString() : null })
     .eq('id', id)
 
+  if (error) throw error
+}
+
+export async function deleteSet(id: string): Promise<void> {
+  const { error } = await db.from('set_entries').delete().eq('id', id)
+  if (error) throw error
+}
+
+// Throws away a workout started by mistake, with its exercises and sets
+// (`on delete cascade`). Scoped to unfinished workouts so it can never
+// delete history.
+export async function discardWorkout(workoutId: string): Promise<void> {
+  const { error } = await db.from('workouts').delete().eq('id', workoutId).is('finished_at', null)
   if (error) throw error
 }
 

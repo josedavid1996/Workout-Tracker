@@ -11,6 +11,7 @@ import { cx } from '../../../shared/lib/cx'
 import { useWakeLock } from '../../../shared/lib/use-wake-lock'
 import { Button } from '../../../shared/ui/button'
 import { Input } from '../../../shared/ui/input'
+import { Sheet } from '../../../shared/ui/sheet'
 import type { Exercise } from '../../exercises/api/exercises'
 import { useExerciseFocusQuery, useExercisesByIdsQuery } from '../../exercises/api/use-exercises'
 import { ExerciseThumbnail } from '../../exercises/components/exercise-thumbnail'
@@ -20,9 +21,13 @@ import { IconButton } from '../../../shared/ui/icon-button'
 import { useRoutineQuery } from '../../routines/api/use-routines'
 import {
   useAddWorkoutExerciseMutation,
+  useDeleteSetMutation,
+  useDiscardWorkoutMutation,
   useFinishWorkoutMutation,
   useLogSetMutation,
   usePreviousSessionSetsQuery,
+  useRemoveWorkoutExerciseMutation,
+  useReplaceWorkoutExerciseMutation,
   useRoutineTargetsQuery,
   useToggleCompletedMutation,
   useUpdateSetMutation,
@@ -32,20 +37,21 @@ import type { SetEntry, WorkoutExerciseWithSets } from '../api/workout-session'
 import { ExercisePicker } from '../components/exercise-picker/exercise-picker'
 import { PlateCalculator } from '../components/plate-calculator/plate-calculator'
 import { TagOverlay } from '../components/tag-overlay/tag-overlay'
+import { planExerciseSwap } from '../lib/exercise-swap'
 import type { NewSetDefaults } from '../lib/new-set-defaults'
 import { newSetDefaults, parseWeightInput } from '../lib/new-set-defaults'
 import { reorderByRememberedIds } from '../lib/reorder-by-remembered-ids'
 import type { WeightOverride } from '../lib/session-sets'
 import { isWeightMissing, orderSets } from '../lib/session-sets'
 
-interface CurrentExercisePanelProps {
+interface ExercisePanelProps {
   workoutExercise: WorkoutExerciseWithSets
   workoutId: string
   exerciseInfo: Exercise | undefined
-  planned: { targetSets: number | null; targetReps: string | null } | undefined
+  planned: { targetSets: number | null; targetReps: string | null; notes: string | null } | undefined
   skipped: boolean
   erroredSetIds: Set<string>
-  onToggleSkip: () => void
+  onOpenMenu: () => void
   onOpenTagOverlay: (set: SetEntry) => void
   onOpenPlateCalculator: (weight: number) => void
   // Per-set answer to "is a stored 0 kg real?" — see `isWeightMissing`. A
@@ -58,7 +64,9 @@ interface CurrentExercisePanelProps {
   onChangeReps: (id: string, reps: number) => void
 }
 
-// One exercise at a time, matching `design/figma-reference/06-sesion-activa.md`:
+// One card per exercise, all of them on screen at once (the session used to
+// show a single exercise with previous/next buttons). The table itself still
+// follows `design/figma-reference/06-sesion-activa.md`:
 // SET/ANTERIOR/KG/REPS table with per-row states (completed=green,
 // current=blue-bordered+editable, future=dimmed, error=red). Rows are
 // pre-filled when the workout starts (`startWorkout`), so the usual gesture
@@ -66,8 +74,9 @@ interface CurrentExercisePanelProps {
 // this is the "current" set; later rows show their planned values dimmed
 // until they become current. "Anterior" is what was done on the same set
 // last time. NO live timers anywhere (decision already taken — see
-// tasks.md), so there is no rest countdown between sets.
-function CurrentExercisePanel({
+// tasks.md), so there is no rest countdown between sets. Tapping a set's
+// number opens its menu (tag, undo, delete); "⋯" opens the exercise's.
+function ExercisePanel({
   workoutExercise,
   workoutId,
   exerciseInfo,
@@ -75,7 +84,7 @@ function CurrentExercisePanel({
   skipped,
   erroredSetIds,
   weightOverrides,
-  onToggleSkip,
+  onOpenMenu,
   onOpenTagOverlay,
   onOpenPlateCalculator,
   onLogSet,
@@ -83,7 +92,7 @@ function CurrentExercisePanel({
   onRetryComplete,
   onChangeWeight,
   onChangeReps,
-}: CurrentExercisePanelProps) {
+}: ExercisePanelProps) {
   const previousSetsQuery = usePreviousSessionSetsQuery(workoutExercise.exercise_id, workoutId)
   const previousSets = previousSetsQuery.data ?? []
   // The most recently completed countable set of the previous session.
@@ -143,6 +152,7 @@ function CurrentExercisePanel({
                 Planeado: {planned.targetSets ?? '—'} x {planned.targetReps ?? '—'}
               </span>
             )}
+            {planned?.notes && <span className="text-xs text-muted">{planned.notes}</span>}
           </div>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1.5">
@@ -159,9 +169,9 @@ function CurrentExercisePanel({
             >
               ?
             </IconButton>
-            <Button type="button" variant="ghost" size="sm" onClick={onToggleSkip}>
-              {skipped ? 'Deshacer' : 'Saltar'}
-            </Button>
+            <IconButton size="sm" aria-label="Opciones del ejercicio" onClick={onOpenMenu}>
+              ⋯
+            </IconButton>
           </div>
         </div>
       </div>
@@ -209,6 +219,7 @@ function CurrentExercisePanel({
                 >
                   <button
                     type="button"
+                    aria-label={`Opciones del set ${index + 1}`}
                     onClick={() => onOpenTagOverlay(set)}
                     className={cx(
                       'text-left font-mono text-sm',
@@ -279,7 +290,9 @@ function CurrentExercisePanel({
             <span aria-hidden="true" className="w-px bg-border" />
             <button
               type="button"
-              onClick={() => onOpenPlateCalculator(lastWeight ?? 0)}
+              onClick={() =>
+                onOpenPlateCalculator(currentSet && !currentWeightMissing ? currentSet.weight : (lastWeight ?? 0))
+              }
               className="flex items-center px-3 font-mono text-xs uppercase tracking-wide text-muted transition-colors hover:bg-surface-2"
             >
               Discos
@@ -325,7 +338,8 @@ function CurrentExercisePanel({
   )
 }
 
-// `/workout/:id` — the active, resumable session. NO live timers anywhere
+// `/workout/:id` — the active, resumable session: every exercise of the
+// workout in one scrollable list. NO live timers anywhere
 // (neither total duration nor rest) — a deliberate, already-taken decision
 // (see tasks.md); duration is shown only as a static value on the summary
 // page. Completing a set updates its row in place (green checkmark, see
@@ -343,6 +357,10 @@ export function WorkoutSessionPage() {
   const routineQuery = useRoutineQuery(workout?.routine_id ?? undefined)
   const routineTargetsQuery = useRoutineTargetsQuery(workout?.routine_id)
   const addExerciseMutation = useAddWorkoutExerciseMutation(workoutId)
+  const removeExerciseMutation = useRemoveWorkoutExerciseMutation(workoutId)
+  const replaceExerciseMutation = useReplaceWorkoutExerciseMutation(workoutId)
+  const deleteSetMutation = useDeleteSetMutation(workoutId)
+  const discardMutation = useDiscardWorkoutMutation()
   const finishMutation = useFinishWorkoutMutation()
   const logSetMutation = useLogSetMutation(workoutId)
   const updateSetMutation = useUpdateSetMutation(workoutId)
@@ -391,8 +409,10 @@ export function WorkoutSessionPage() {
   const exerciseInfoQuery = useExercisesByIdsQuery(exerciseIds)
   const exerciseInfoById = new Map((exerciseInfoQuery.data ?? []).map((exercise) => [exercise.id, exercise]))
 
-  const [currentIndex, setCurrentIndex] = useState(0)
-  const [pickerOpen, setPickerOpen] = useState(false)
+  // `'add'` appends a new exercise; `{ swapId }` replaces that workout
+  // exercise with the picked one.
+  const [pickerMode, setPickerMode] = useState<'add' | { swapId: string } | null>(null)
+  const [menuExerciseId, setMenuExerciseId] = useState<string | null>(null)
   const [tagOverlaySet, setTagOverlaySet] = useState<SetEntry | null>(null)
   const [plateCalculatorWeight, setPlateCalculatorWeight] = useState<number | null>(null)
   const [skippedIds, setSkippedIds] = useState<Set<string>>(new Set())
@@ -404,34 +424,33 @@ export function WorkoutSessionPage() {
   // an explicit pending 0 has to be typed again.
   const [weightOverrides, setWeightOverrides] = useState<Map<string, WeightOverride>>(new Map())
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false)
+  const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false)
 
   // Screen stays on for as long as an unfinished workout is on screen.
   useWakeLock(!!workout && workout.finished_at === null)
-
-  // Derived, not stored: clamp defensively during render instead of via an
-  // effect + extra state update, in case `exercises` ever shrinks (e.g. a
-  // future edit feature) while a later index was already selected.
-  const clampedIndex = exercises.length > 0 ? Math.min(currentIndex, exercises.length - 1) : 0
 
   if (workoutQuery.isLoading || !workout) {
     return <p className="p-6 text-muted">Cargando...</p>
   }
 
-  const totalSetsLogged = exercises.reduce((sum, we) => sum + we.set_entries.length, 0)
-  // Adding an exercise mid-session is only offered for freestyle workouts (no
-  // `routine_id`) and only before any set has been logged at all — once
-  // logging has started, the exercise list is frozen for this workout.
-  const canAddExercise = workout.routine_id === null && totalSetsLogged === 0
+  const allSets = exercises.flatMap((exercise) => exercise.set_entries)
+  const completedSetCount = allSets.filter((set) => set.completed).length
 
-  const targetsByPosition = new Map(
+  // Matched by exercise, not position: positions shift once an exercise is
+  // added or swapped mid-session.
+  const targetsByExerciseId = new Map(
     (routineTargetsQuery.data ?? []).map((target) => [
-      target.position,
-      { targetSets: target.target_sets, targetReps: target.target_reps },
+      target.exercise_id,
+      { targetSets: target.target_sets, targetReps: target.target_reps, notes: target.notes },
     ]),
   )
 
-  const currentExercise = exercises[clampedIndex]
   const routineName = workout.routine_id ? (routineQuery.data?.name ?? '…') : 'Freestyle'
+  const menuExercise = exercises.find((exercise) => exercise.id === menuExerciseId)
+  const menuExerciseHasCompletedSets = menuExercise?.set_entries.some((set) => set.completed) ?? false
+  const swapExercise =
+    pickerMode && pickerMode !== 'add' ? exercises.find((exercise) => exercise.id === pickerMode.swapId) : undefined
+  const swapExerciseInfo = swapExercise ? exerciseInfoById.get(swapExercise.exercise_id) : undefined
 
   function toggleSkip(workoutExerciseId: string) {
     setSkippedIds((current) => {
@@ -465,13 +484,12 @@ export function WorkoutSessionPage() {
     })
   }
 
-  function handleLogSet({ weight, reps }: NewSetDefaults) {
-    if (!currentExercise) return
+  function handleLogSet(workoutExercise: WorkoutExerciseWithSets, { weight, reps }: NewSetDefaults) {
     logSetMutation.mutate(
       {
-        workoutExerciseId: currentExercise.id,
+        workoutExerciseId: workoutExercise.id,
         workoutId,
-        exerciseId: currentExercise.exercise_id,
+        exerciseId: workoutExercise.exercise_id,
         // `reps` is always > 0 here — `set_entries` requires it for every tag
         // except `failure` (0005_failure_reps_zero.sql).
         weight: weight ?? 0,
@@ -533,8 +551,27 @@ export function WorkoutSessionPage() {
   }
 
   async function handleSelectExercise(exercise: Exercise) {
-    await addExerciseMutation.mutateAsync({ exerciseId: exercise.id, position: exercises.length })
-    setPickerOpen(false)
+    const mode = pickerMode
+    setPickerMode(null)
+    if (mode === 'add') {
+      const nextPosition = exercises.reduce((max, item) => Math.max(max, item.position + 1), 0)
+      await addExerciseMutation.mutateAsync({ exerciseId: exercise.id, position: nextPosition })
+      return
+    }
+    if (!mode || !swapExercise) return
+    await replaceExerciseMutation.mutateAsync({
+      workoutExerciseId: swapExercise.id,
+      newExerciseId: exercise.id,
+      plan: planExerciseSwap({
+        target: { id: swapExercise.id, position: swapExercise.position, sets: swapExercise.set_entries },
+        others: exercises.filter((item) => item.id !== swapExercise.id),
+      }),
+    })
+  }
+
+  async function handleDiscard() {
+    await discardMutation.mutateAsync(workoutId)
+    navigate('/')
   }
 
   return (
@@ -558,56 +595,38 @@ export function WorkoutSessionPage() {
       </header>
 
       <div className="mx-auto flex max-w-md flex-col gap-4 px-4 pt-4">
-        {exercises.length > 0 && (
+        {allSets.length > 0 && (
           <div className="flex items-center gap-3">
             <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-2">
               <div
                 className="h-full rounded-full bg-accent transition-all"
-                style={{ width: `${((clampedIndex + 1) / exercises.length) * 100}%` }}
+                style={{ width: `${(completedSetCount / allSets.length) * 100}%` }}
               />
             </div>
             <span className="font-mono text-xs text-muted">
-              {clampedIndex + 1} / {exercises.length}
+              {completedSetCount} / {allSets.length} sets
             </span>
           </div>
         )}
 
-        {exercises.length > 1 && (
-          <div className="flex justify-between">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={clampedIndex === 0}
-              onClick={() => setCurrentIndex((index) => Math.max(0, index - 1))}
-            >
-              ← Anterior
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={clampedIndex === exercises.length - 1}
-              onClick={() => setCurrentIndex((index) => Math.min(exercises.length - 1, index + 1))}
-            >
-              Siguiente →
-            </Button>
-          </div>
+        {exercises.length === 0 && (
+          <p className="text-sm text-muted">Este entrenamiento todavía no tiene ejercicios.</p>
         )}
 
-        {currentExercise ? (
-          <CurrentExercisePanel
-            workoutExercise={currentExercise}
+        {exercises.map((workoutExercise) => (
+          <ExercisePanel
+            key={workoutExercise.id}
+            workoutExercise={workoutExercise}
             workoutId={workoutId}
-            exerciseInfo={exerciseInfoById.get(currentExercise.exercise_id)}
-            planned={targetsByPosition.get(currentExercise.position)}
-            skipped={skippedIds.has(currentExercise.id)}
+            exerciseInfo={exerciseInfoById.get(workoutExercise.exercise_id)}
+            planned={targetsByExerciseId.get(workoutExercise.exercise_id)}
+            skipped={skippedIds.has(workoutExercise.id)}
             erroredSetIds={erroredSetIds}
             weightOverrides={weightOverrides}
-            onToggleSkip={() => toggleSkip(currentExercise.id)}
+            onOpenMenu={() => setMenuExerciseId(workoutExercise.id)}
             onOpenTagOverlay={setTagOverlaySet}
             onOpenPlateCalculator={setPlateCalculatorWeight}
-            onLogSet={handleLogSet}
+            onLogSet={(defaults) => handleLogSet(workoutExercise, defaults)}
             onCompleteSet={handleCompleteSet}
             onRetryComplete={handleRetryComplete}
             onChangeWeight={handleChangeWeight}
@@ -615,18 +634,72 @@ export function WorkoutSessionPage() {
               updateSetMutation.mutate({ id: setId, patch: { reps } }, { onError: () => markError(setId) })
             }
           />
-        ) : (
-          <p className="text-sm text-muted">Este entrenamiento todavía no tiene ejercicios.</p>
-        )}
+        ))}
 
-        {canAddExercise && (
-          <Button type="button" variant="secondary" onClick={() => setPickerOpen(true)}>
-            Agregar ejercicio
-          </Button>
+        {(addExerciseMutation.isError || replaceExerciseMutation.isError || removeExerciseMutation.isError) && (
+          <p className="text-sm text-red-400">No se pudo actualizar los ejercicios. Probá de nuevo.</p>
         )}
+        {deleteSetMutation.isError && <p className="text-sm text-red-400">No se pudo eliminar el set.</p>}
+
+        <Button type="button" variant="secondary" onClick={() => setPickerMode('add')}>
+          Agregar ejercicio
+        </Button>
       </div>
 
-      <ExercisePicker open={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={handleSelectExercise} />
+      <ExercisePicker
+        open={pickerMode !== null}
+        onClose={() => setPickerMode(null)}
+        onSelect={handleSelectExercise}
+        relatedTo={
+          swapExercise && swapExerciseInfo?.target
+            ? { target: swapExerciseInfo.target, excludeId: swapExercise.exercise_id }
+            : undefined
+        }
+      />
+
+      <Sheet open={!!menuExercise} onClose={() => setMenuExerciseId(null)} title="Opciones del ejercicio">
+        {menuExercise && (
+          <div className="flex flex-col gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setPickerMode({ swapId: menuExercise.id })
+                setMenuExerciseId(null)
+              }}
+            >
+              Cambiar ejercicio
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                toggleSkip(menuExercise.id)
+                setMenuExerciseId(null)
+              }}
+            >
+              {skippedIds.has(menuExercise.id) ? 'Deshacer salto' : 'Saltar ejercicio'}
+            </Button>
+            {menuExerciseHasCompletedSets ? (
+              <p className="text-xs text-muted">
+                Ya tiene sets completados: al cambiarlo se conserva y el nuevo ejercicio se agrega debajo.
+              </p>
+            ) : (
+              <Button
+                type="button"
+                variant="ghost"
+                className="text-red-300"
+                onClick={() => {
+                  removeExerciseMutation.mutate(menuExercise.id)
+                  setMenuExerciseId(null)
+                }}
+              >
+                Quitar ejercicio
+              </Button>
+            )}
+          </div>
+        )}
+      </Sheet>
 
       <TagOverlay
         open={!!tagOverlaySet}
@@ -634,6 +707,14 @@ export function WorkoutSessionPage() {
         onClose={() => setTagOverlaySet(null)}
         onSelect={(tag) => {
           if (tagOverlaySet) updateSetMutation.mutate({ id: tagOverlaySet.id, patch: { tag } })
+        }}
+        onUncomplete={
+          tagOverlaySet?.completed
+            ? () => toggleCompletedMutation.mutate({ id: tagOverlaySet.id, completed: false })
+            : undefined
+        }
+        onDelete={() => {
+          if (tagOverlaySet) deleteSetMutation.mutate(tagOverlaySet.id)
         }}
       />
 
@@ -658,6 +739,37 @@ export function WorkoutSessionPage() {
             <Button type="button" variant="ghost" onClick={() => setCloseConfirmOpen(false)}>
               Seguir entrenando
             </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              className="text-red-300"
+              onClick={() => {
+                setCloseConfirmOpen(false)
+                setDiscardConfirmOpen(true)
+              }}
+            >
+              Descartar workout
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {discardConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-background/95 px-6 text-center">
+          <h2 className="font-display text-xl font-extrabold uppercase tracking-wide text-foreground">
+            ¿Descartar workout?
+          </h2>
+          <p className="text-sm text-muted">
+            Se borra este entrenamiento con todos sus sets. No queda en el historial y no se puede deshacer.
+          </p>
+          <div className="flex w-full max-w-xs flex-col gap-2">
+            <Button type="button" disabled={discardMutation.isPending} onClick={handleDiscard}>
+              {discardMutation.isPending ? 'Descartando...' : 'Sí, descartar'}
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => setDiscardConfirmOpen(false)}>
+              Cancelar
+            </Button>
+            {discardMutation.isError && <p className="text-sm text-red-400">No se pudo descartar. Probá de nuevo.</p>}
           </div>
         </div>
       )}

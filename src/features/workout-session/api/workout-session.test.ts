@@ -34,11 +34,15 @@ vi.mock('../../../shared/supabase/client', () => ({
 
 import {
   addWorkoutExercise,
+  deleteSet,
+  discardWorkout,
   finishWorkout,
   getLastLoggedWeight,
   getPreviousSessionSets,
   getUserEquipment,
   logSet,
+  removeWorkoutExercise,
+  replaceWorkoutExercise,
   resumeActiveWorkout,
   startWorkout,
   toggleCompleted,
@@ -358,6 +362,118 @@ describe('getLastLoggedWeight', () => {
 // test file — this only confirms the re-export from here still resolves to
 // that exact same function, so `use-workout-session.ts` and
 // `plate-calculator.tsx` keep working unchanged.
+describe('deleteSet', () => {
+  it('deletes the set_entries row by id', async () => {
+    const builder = makeQueryBuilder({ data: null, error: null })
+    from.mockReturnValue(builder)
+
+    await deleteSet('set-1')
+
+    expect(from).toHaveBeenCalledWith('set_entries')
+    expect(builder.delete).toHaveBeenCalled()
+    expect(builder.eq).toHaveBeenCalledWith('id', 'set-1')
+  })
+
+  it('throws when the delete fails', async () => {
+    from.mockReturnValue(makeQueryBuilder({ data: null, error: new Error('nope') }))
+    await expect(deleteSet('set-1')).rejects.toThrow('nope')
+  })
+})
+
+describe('discardWorkout', () => {
+  it('deletes the workout only while it is still unfinished', async () => {
+    const builder = makeQueryBuilder({ data: null, error: null })
+    from.mockReturnValue(builder)
+
+    await discardWorkout('workout-1')
+
+    expect(from).toHaveBeenCalledWith('workouts')
+    expect(builder.delete).toHaveBeenCalled()
+    expect(builder.eq).toHaveBeenCalledWith('id', 'workout-1')
+    expect(builder.is).toHaveBeenCalledWith('finished_at', null)
+  })
+
+  it('throws when the delete fails', async () => {
+    from.mockReturnValue(makeQueryBuilder({ data: null, error: new Error('nope') }))
+    await expect(discardWorkout('workout-1')).rejects.toThrow('nope')
+  })
+})
+
+describe('removeWorkoutExercise', () => {
+  it('deletes the workout_exercises row by id', async () => {
+    const builder = makeQueryBuilder({ data: null, error: null })
+    from.mockReturnValue(builder)
+
+    await removeWorkoutExercise('we-1')
+
+    expect(from).toHaveBeenCalledWith('workout_exercises')
+    expect(builder.delete).toHaveBeenCalled()
+    expect(builder.eq).toHaveBeenCalledWith('id', 'we-1')
+  })
+})
+
+describe('replaceWorkoutExercise', () => {
+  function setup() {
+    getUser.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null })
+    const workoutExercisesBuilder = makeQueryBuilder({
+      data: { id: 'we-new', workout_id: 'workout-1', exercise_id: 'ex-new', position: 1 },
+      error: null,
+    })
+    const setEntriesBuilder = makeQueryBuilder({ data: null, error: null })
+    from.mockImplementation((table: string) =>
+      table === 'workout_exercises' ? workoutExercisesBuilder : setEntriesBuilder,
+    )
+    rpc.mockResolvedValue({ data: [], error: null })
+    return { workoutExercisesBuilder, setEntriesBuilder }
+  }
+
+  it('removes the original and inserts the replacement in its slot with pre-filled sets', async () => {
+    const { workoutExercisesBuilder, setEntriesBuilder } = setup()
+
+    await replaceWorkoutExercise({
+      workoutId: 'workout-1',
+      workoutExerciseId: 'we-1',
+      newExerciseId: 'ex-new',
+      plan: { removeOriginal: true, insertPosition: 1, shifts: [], setCount: 2, reps: 10 },
+    })
+
+    expect(workoutExercisesBuilder.delete).toHaveBeenCalled()
+    expect(workoutExercisesBuilder.eq).toHaveBeenCalledWith('id', 'we-1')
+    expect(workoutExercisesBuilder.insert).toHaveBeenCalledWith({
+      workout_id: 'workout-1',
+      exercise_id: 'ex-new',
+      position: 1,
+      user_id: 'user-1',
+    })
+    expect(setEntriesBuilder.insert).toHaveBeenCalledWith([
+      expect.objectContaining({ workout_exercise_id: 'we-new', exercise_id: 'ex-new', weight: 0, reps: 10 }),
+      expect.objectContaining({ workout_exercise_id: 'we-new', exercise_id: 'ex-new', weight: 0, reps: 10 }),
+    ])
+  })
+
+  it('keeps the original and shifts later exercises when the plan says so', async () => {
+    const { workoutExercisesBuilder } = setup()
+
+    await replaceWorkoutExercise({
+      workoutId: 'workout-1',
+      workoutExerciseId: 'we-1',
+      newExerciseId: 'ex-new',
+      plan: {
+        removeOriginal: false,
+        insertPosition: 2,
+        shifts: [{ id: 'we-2', position: 3 }],
+        setCount: 0,
+        reps: null,
+      },
+    })
+
+    expect(workoutExercisesBuilder.delete).not.toHaveBeenCalled()
+    expect(workoutExercisesBuilder.update).toHaveBeenCalledWith({ position: 3 })
+    expect(workoutExercisesBuilder.eq).toHaveBeenCalledWith('id', 'we-2')
+    expect(workoutExercisesBuilder.insert).toHaveBeenCalledWith(expect.objectContaining({ position: 2 }))
+  })
+})
+
 describe('getPreviousSessionSets', () => {
   it('returns the sets of the most recent other workout, oldest first', async () => {
     rpc.mockResolvedValue({

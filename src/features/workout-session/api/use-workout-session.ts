@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { SetTag } from '../../../shared/lib/countable-set'
-import type { LogSetParams, SetPatch } from './workout-session'
+import type { LogSetParams, ReplaceWorkoutExerciseParams, SetPatch } from './workout-session'
 import {
   addWorkoutExercise,
+  deleteSet,
+  discardWorkout,
   fetchRoutineTargets,
   fetchWorkout,
   finishWorkout,
@@ -10,6 +12,8 @@ import {
   getPreviousSessionSets,
   getUserEquipment,
   logSet,
+  removeWorkoutExercise,
+  replaceWorkoutExercise,
   resumeActiveWorkout,
   startWorkout,
   toggleCompleted,
@@ -89,6 +93,54 @@ export function useAddWorkoutExerciseMutation(workoutId: string) {
       addWorkoutExercise(workoutId, exerciseId, position),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: workoutQueryKeys.detail(workoutId) })
+    },
+  })
+}
+
+export function useRemoveWorkoutExerciseMutation(workoutId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (workoutExerciseId: string) => removeWorkoutExercise(workoutExerciseId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: workoutQueryKeys.detail(workoutId) })
+    },
+  })
+}
+
+export function useReplaceWorkoutExerciseMutation(workoutId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (params: Omit<ReplaceWorkoutExerciseParams, 'workoutId'>) =>
+      replaceWorkoutExercise({ ...params, workoutId }),
+    // Also on error: a swap is several writes, so a failure can leave some
+    // of them applied — refetch to show what is really stored.
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: workoutQueryKeys.detail(workoutId) })
+    },
+  })
+}
+
+export function useDeleteSetMutation(workoutId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (id: string) => deleteSet(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: workoutQueryKeys.detail(workoutId) })
+    },
+  })
+}
+
+export function useDiscardWorkoutMutation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (workoutId: string) => discardWorkout(workoutId),
+    onSuccess: (_data, workoutId) => {
+      queryClient.removeQueries({ queryKey: workoutQueryKeys.detail(workoutId) })
+      queryClient.invalidateQueries({ queryKey: workoutQueryKeys.active })
     },
   })
 }
