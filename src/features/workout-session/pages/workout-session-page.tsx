@@ -8,6 +8,7 @@ import iconPlus from '../../../assets/icons/icon-plus.svg'
 import iconRetry from '../../../assets/icons/icon-retry-session.svg'
 import iconWarningSmall from '../../../assets/icons/icon-warning-small.svg'
 import { cx } from '../../../shared/lib/cx'
+import { useWakeLock } from '../../../shared/lib/use-wake-lock'
 import { Button } from '../../../shared/ui/button'
 import { Input } from '../../../shared/ui/input'
 import type { Exercise } from '../../exercises/api/exercises'
@@ -403,6 +404,9 @@ export function WorkoutSessionPage() {
   // an explicit pending 0 has to be typed again.
   const [weightOverrides, setWeightOverrides] = useState<Map<string, WeightOverride>>(new Map())
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false)
+
+  // Screen stays on for as long as an unfinished workout is on screen.
+  useWakeLock(!!workout && workout.finished_at === null)
 
   // Derived, not stored: clamp defensively during render instead of via an
   // effect + extra state update, in case `exercises` ever shrinks (e.g. a
