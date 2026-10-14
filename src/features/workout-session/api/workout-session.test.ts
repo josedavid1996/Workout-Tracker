@@ -320,6 +320,17 @@ describe('toggleCompleted', () => {
   })
 })
 
+describe('toggleCompleted with an explicit timestamp', () => {
+  it('uses the given completed_at instead of now', async () => {
+    const builder = makeQueryBuilder({ data: null, error: null })
+    from.mockReturnValue(builder)
+
+    await toggleCompleted('set-1', true, '2026-01-10T11:00:00Z')
+
+    expect(builder.update).toHaveBeenCalledWith({ completed: true, completed_at: '2026-01-10T11:00:00Z' })
+  })
+})
+
 describe('finishWorkout', () => {
   it('sets finished_at to now on the given workout', async () => {
     const builder = makeQueryBuilder({ data: null, error: null })

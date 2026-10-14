@@ -5,7 +5,7 @@ import { getUserEquipment } from '../../equipment/api/equipment'
 import type { UserEquipment } from '../../equipment/api/equipment'
 import type { ExerciseSwapPlan } from '../lib/exercise-swap'
 import type { CountableSetRow, PreviousSet } from '../lib/prefill-sets'
-import { buildPrefilledSets, pickPreviousSessionSets } from '../lib/prefill-sets'
+import { buildPrefilledSets, occurrenceIndexes, pickPreviousSessionSets } from '../lib/prefill-sets'
 
 // Same untyped-client cast used across other feature `api/` modules until
 // `database.types.ts` is generated — see `features/routines/api/routines.ts`.
@@ -119,12 +119,19 @@ export async function startWorkout(routineId: string | null): Promise<Workout> {
       if (insertError) throw insertError
 
       const targetsByPosition = new Map(planned.map((row) => [row.position, row]))
+      const insertedRows = ((inserted as Pick<WorkoutExercise, 'id' | 'exercise_id' | 'position'>[] | null) ?? [])
+        .slice()
+        .sort((a, b) => a.position - b.position)
+      // A routine may list the same exercise twice; each repeat is matched
+      // to its own block of the previous session.
+      const occurrences = occurrenceIndexes(insertedRows.map((row) => row.exercise_id))
       await prefillSetRows(
         userId,
         (workout as Workout).id,
-        ((inserted as Pick<WorkoutExercise, 'id' | 'exercise_id' | 'position'>[] | null) ?? []).map((row) => ({
+        insertedRows.map((row, index) => ({
           workoutExerciseId: row.id,
           exerciseId: row.exercise_id,
+          occurrence: occurrences[index],
           targetSets: targetsByPosition.get(row.position)?.target_sets ?? null,
           targetReps: targetsByPosition.get(row.position)?.target_reps ?? null,
         })),
@@ -138,6 +145,7 @@ export async function startWorkout(routineId: string | null): Promise<Workout> {
 type PrefillTarget = {
   workoutExerciseId: string
   exerciseId: string
+  occurrence?: number
   targetSets: number | null
   targetReps: string | null
 }
@@ -149,7 +157,9 @@ async function prefillSetRows(userId: string, workoutId: string, targets: Prefil
   const setRows = (
     await Promise.all(
       targets.map(async (target) => {
-        const previousSets = await getPreviousSessionSets(target.exerciseId, workoutId).catch(() => [])
+        const previousSets = await getPreviousSessionSets(target.exerciseId, workoutId, target.occurrence).catch(
+          () => [],
+        )
         return buildPrefilledSets({
           targetSets: target.targetSets,
           targetReps: target.targetReps,
@@ -335,10 +345,13 @@ export async function updateSet(id: string, patch: SetPatch): Promise<void> {
   if (error) throw error
 }
 
-export async function toggleCompleted(id: string, completed: boolean): Promise<void> {
+// `completedAt` overrides "now" — used when a set is completed while editing
+// an already finished workout, so it is dated with that workout instead of
+// today (every "last time"/weekly view reads `completed_at`).
+export async function toggleCompleted(id: string, completed: boolean, completedAt?: string): Promise<void> {
   const { error } = await db
     .from('set_entries')
-    .update({ completed, completed_at: completed ? new Date().toISOString() : null })
+    .update({ completed, completed_at: completed ? (completedAt ?? new Date().toISOString()) : null })
     .eq('id', id)
 
   if (error) throw error
@@ -385,12 +398,17 @@ export async function getLastLoggedWeight(exerciseId: string, excludeWorkoutId: 
 
 // What was done last time for one exercise: the countable sets of its most
 // recent workout other than `excludeWorkoutId`, oldest-first. Same RPC and
-// client-side exclusion as `getLastLoggedWeight` above.
-export async function getPreviousSessionSets(exerciseId: string, excludeWorkoutId: string): Promise<PreviousSet[]> {
+// client-side exclusion as `getLastLoggedWeight` above. `occurrence` picks
+// the block when that workout had the exercise more than once.
+export async function getPreviousSessionSets(
+  exerciseId: string,
+  excludeWorkoutId: string,
+  occurrence = 0,
+): Promise<PreviousSet[]> {
   const { data, error } = await db.rpc('countable_sets', { p_exercise_id: exerciseId })
   if (error) throw error
 
-  return pickPreviousSessionSets((data as CountableSetRow[] | null) ?? [], excludeWorkoutId)
+  return pickPreviousSessionSets((data as CountableSetRow[] | null) ?? [], excludeWorkoutId, occurrence)
 }
 
 // Re-exported from `features/equipment/api/equipment.ts` (Phase 10, PR5) —

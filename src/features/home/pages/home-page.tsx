@@ -82,8 +82,12 @@ export function HomePage() {
       return
     }
     if (!featuredRoutine) return
-    const workout = await startMutation.mutateAsync(featuredRoutine.id)
-    navigate(`/workout/${workout.id}`)
+    try {
+      const workout = await startMutation.mutateAsync(featuredRoutine.id)
+      navigate(`/workout/${workout.id}`)
+    } catch {
+      // Reported through `startMutation.isError` below.
+    }
   }
 
   // Real, computed streak — not a placeholder — see

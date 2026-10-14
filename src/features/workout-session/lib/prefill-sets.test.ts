@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { FALLBACK_REPS } from './new-set-defaults'
-import { buildPrefilledSets, pickPreviousSessionSets } from './prefill-sets'
+import { buildPrefilledSets, occurrenceIndexes, pickPreviousSessionSets } from './prefill-sets'
 
 describe('buildPrefilledSets', () => {
   it('creates one row per target set with the planned reps and last time weights', () => {
@@ -65,6 +65,22 @@ describe('buildPrefilledSets', () => {
     expect(buildPrefilledSets({ targetSets: 0, targetReps: '10', previousSets: [{ weight: 5, reps: 5 }] })).toEqual([])
   })
 
+  it('never copies a 0-rep failure set from last time as the rep count', () => {
+    expect(
+      buildPrefilledSets({
+        targetSets: null,
+        targetReps: 'AMRAP',
+        previousSets: [
+          { weight: 80, reps: 8 },
+          { weight: 80, reps: 0 },
+        ],
+      }),
+    ).toEqual([
+      { weight: 80, reps: 8 },
+      { weight: 80, reps: FALLBACK_REPS },
+    ])
+  })
+
   it('keeps an explicit 0 kg (bodyweight) from last time', () => {
     expect(buildPrefilledSets({ targetSets: 1, targetReps: '10', previousSets: [{ weight: 0, reps: 10 }] })).toEqual([
       { weight: 0, reps: 10 },
@@ -90,5 +106,32 @@ describe('pickPreviousSessionSets', () => {
   it('returns an empty list when only the excluded workout has sets, or there are none', () => {
     expect(pickPreviousSessionSets([rows[3]], 'current')).toEqual([])
     expect(pickPreviousSessionSets([], 'current')).toEqual([])
+  })
+})
+
+describe('pickPreviousSessionSets with a repeated exercise', () => {
+  const rows = [
+    { workout_id: 'prev', workout_exercise_id: 'we-heavy', weight: 100, reps: 5, completed_at: '2026-01-08T10:00:00Z' },
+    { workout_id: 'prev', workout_exercise_id: 'we-backoff', weight: 70, reps: 15, completed_at: '2026-01-08T10:30:00Z' },
+    { workout_id: 'prev', workout_exercise_id: 'we-heavy', weight: 100, reps: 4, completed_at: '2026-01-08T10:05:00Z' },
+  ]
+
+  it('returns only the block matching the occurrence, blocks ordered by when they started', () => {
+    expect(pickPreviousSessionSets(rows, 'current', 0)).toEqual([
+      { weight: 100, reps: 5 },
+      { weight: 100, reps: 4 },
+    ])
+    expect(pickPreviousSessionSets(rows, 'current', 1)).toEqual([{ weight: 70, reps: 15 }])
+  })
+
+  it('returns nothing for an occurrence the previous session did not have', () => {
+    expect(pickPreviousSessionSets(rows, 'current', 2)).toEqual([])
+  })
+})
+
+describe('occurrenceIndexes', () => {
+  it('numbers each repeat of the same exercise in list order', () => {
+    expect(occurrenceIndexes(['bench', 'row', 'bench', 'bench', 'row'])).toEqual([0, 0, 1, 2, 1])
+    expect(occurrenceIndexes([])).toEqual([])
   })
 })

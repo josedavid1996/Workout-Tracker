@@ -40,6 +40,7 @@ import { PlateCalculator } from '../components/plate-calculator/plate-calculator
 import { TagOverlay } from '../components/tag-overlay/tag-overlay'
 import { planExerciseSwap } from '../lib/exercise-swap'
 import type { NewSetDefaults } from '../lib/new-set-defaults'
+import { occurrenceIndexes } from '../lib/prefill-sets'
 import { newSetDefaults, parseWeightInput } from '../lib/new-set-defaults'
 import { reorderByRememberedIds } from '../lib/reorder-by-remembered-ids'
 import type { WeightOverride } from '../lib/session-sets'
@@ -48,6 +49,11 @@ import { isWeightMissing, orderSets } from '../lib/session-sets'
 interface ExercisePanelProps {
   workoutExercise: WorkoutExerciseWithSets
   workoutId: string
+  // Which repeat of its exercise this card is (0 unless the workout lists
+  // the same exercise more than once).
+  occurrence: number
+  // Editing an already finished workout: every row is editable in place.
+  editAll: boolean
   exerciseInfo: Exercise | undefined
   planned: { targetSets: number | null; targetReps: string | null; notes: string | null } | undefined
   skipped: boolean
@@ -80,6 +86,8 @@ interface ExercisePanelProps {
 function ExercisePanel({
   workoutExercise,
   workoutId,
+  occurrence,
+  editAll,
   exerciseInfo,
   planned,
   skipped,
@@ -94,7 +102,7 @@ function ExercisePanel({
   onChangeWeight,
   onChangeReps,
 }: ExercisePanelProps) {
-  const previousSetsQuery = usePreviousSessionSetsQuery(workoutExercise.exercise_id, workoutId)
+  const previousSetsQuery = usePreviousSessionSetsQuery(workoutExercise.exercise_id, workoutId, occurrence)
   const previousSets = previousSetsQuery.data ?? []
   // The most recently completed countable set of the previous session.
   const lastWeight = previousSets.at(-1)?.weight ?? null
@@ -206,6 +214,7 @@ function ExercisePanel({
               const isCurrent = index === currentSetIndex
               const hasError = erroredSetIds.has(set.id)
               const isFuture = !set.completed && !isCurrent
+              const editable = isCurrent || editAll
 
               return (
                 <li
@@ -233,7 +242,7 @@ function ExercisePanel({
                     {previousSets[index] ? `${previousSets[index].weight}×${previousSets[index].reps}` : '—'}
                   </span>
 
-                  {isCurrent ? (
+                  {editable ? (
                     <Input
                       aria-label="Peso (kg)"
                       type="number"
@@ -248,7 +257,7 @@ function ExercisePanel({
                     <span className="font-mono text-sm text-foreground">{weightMissing(set) ? '—' : `${set.weight}`}</span>
                   )}
 
-                  {isCurrent ? (
+                  {editable ? (
                     <Input
                       aria-label="Reps"
                       type="number"
@@ -344,7 +353,7 @@ function ExercisePanel({
 // (neither total duration nor rest) — a deliberate, already-taken decision
 // (see tasks.md); duration is shown only as a static value on the summary
 // page. Completing a set updates its row in place (green checkmark, see
-// `CurrentExercisePanel`) with no full-screen interstitial — an earlier
+// `ExercisePanel`) with no full-screen interstitial — an earlier
 // "Set registrado" overlay forced a manual "Continuar" tap after every
 // single set, which was pure friction, not information the row itself
 // doesn't already show.
@@ -439,19 +448,28 @@ export function WorkoutSessionPage() {
   const completedSetCount = allSets.filter((set) => set.completed).length
 
   // Matched by exercise, not position: positions shift once an exercise is
-  // added or swapped mid-session.
-  const targetsByExerciseId = new Map(
-    (routineTargetsQuery.data ?? []).map((target) => [
-      target.exercise_id,
-      { targetSets: target.target_sets, targetReps: target.target_reps, notes: target.notes },
-    ]),
-  )
+  // added or swapped mid-session. A routine may list the same exercise more
+  // than once, so the nth card of an exercise takes its nth routine target.
+  const targetsByExerciseId = new Map<
+    string,
+    { targetSets: number | null; targetReps: string | null; notes: string | null }[]
+  >()
+  for (const target of routineTargetsQuery.data ?? []) {
+    const list = targetsByExerciseId.get(target.exercise_id) ?? []
+    list.push({ targetSets: target.target_sets, targetReps: target.target_reps, notes: target.notes })
+    targetsByExerciseId.set(target.exercise_id, list)
+  }
+  const occurrences = occurrenceIndexes(exercises.map((exercise) => exercise.exercise_id))
 
   const routineName = workout.routine_id ? (routineQuery.data?.name ?? '…') : 'Freestyle'
   // A finished workout opened from its summary ("Editar sets"): same
   // screen, but leaving it never touches `finished_at` (which would change
   // its recorded duration) and it can't be discarded from here.
   const isFinished = workout.finished_at !== null
+  // A set completed while editing a finished workout is dated with that
+  // workout, not today — `completed_at` drives every "last time" and weekly
+  // view. `undefined` (an open workout) means "now".
+  const completedAtOverride = workout.finished_at ? { completedAt: workout.finished_at } : {}
   const menuExercise = exercises.find((exercise) => exercise.id === menuExerciseId)
   const menuExerciseHasCompletedSets = menuExercise?.set_entries.some((set) => set.completed) ?? false
   const swapExercise =
@@ -524,7 +542,7 @@ export function WorkoutSessionPage() {
     // Never silently save an unknown weight as 0 (see `isWeightMissing`).
     if (isWeightMissing(set, weightOverrides.get(set.id))) return
     toggleCompletedMutation.mutate(
-      { id: set.id, completed: true },
+      { id: set.id, completed: true, ...completedAtOverride },
       {
         onSuccess: () => clearError(set.id),
         onError: () => markError(set.id),
@@ -543,7 +561,7 @@ export function WorkoutSessionPage() {
 
   function handleRetryComplete(set: SetEntry) {
     toggleCompletedMutation.mutate(
-      { id: set.id, completed: true },
+      { id: set.id, completed: true, ...completedAtOverride },
       {
         onSuccess: () => clearError(set.id),
         onError: () => markError(set.id),
@@ -628,13 +646,15 @@ export function WorkoutSessionPage() {
           <p className="text-sm text-muted">Este entrenamiento todavía no tiene ejercicios.</p>
         )}
 
-        {exercises.map((workoutExercise) => (
+        {exercises.map((workoutExercise, index) => (
           <ExercisePanel
             key={workoutExercise.id}
             workoutExercise={workoutExercise}
             workoutId={workoutId}
+            occurrence={occurrences[index]}
+            editAll={isFinished}
             exerciseInfo={exerciseInfoById.get(workoutExercise.exercise_id)}
-            planned={targetsByExerciseId.get(workoutExercise.exercise_id)}
+            planned={targetsByExerciseId.get(workoutExercise.exercise_id)?.[occurrences[index]]}
             skipped={skippedIds.has(workoutExercise.id)}
             erroredSetIds={erroredSetIds}
             weightOverrides={weightOverrides}
@@ -723,8 +743,10 @@ export function WorkoutSessionPage() {
         onSelect={(tag) => {
           if (tagOverlaySet) updateSetMutation.mutate({ id: tagOverlaySet.id, patch: { tag } })
         }}
+        // Not offered on a finished workout: its rows are edited in place,
+        // and un-completing would lose the set's original completion date.
         onUncomplete={
-          tagOverlaySet?.completed
+          tagOverlaySet?.completed && !isFinished
             ? () => toggleCompletedMutation.mutate({ id: tagOverlaySet.id, completed: false })
             : undefined
         }

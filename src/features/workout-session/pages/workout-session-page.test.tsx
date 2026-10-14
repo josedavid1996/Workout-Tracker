@@ -311,6 +311,52 @@ describe('WorkoutSessionPage', () => {
     expect(await screen.findByText('SUMMARY')).toBeInTheDocument()
   })
 
+  it('edits a completed set of a finished workout in place, keeping its completion date', () => {
+    useWorkoutQuery.mockReturnValue({
+      data: { ...workout(), finished_at: '2026-01-10T11:00:00Z' },
+      isLoading: false,
+    })
+    renderPage()
+
+    const bench = within(panel('Bench Press'))
+    fireEvent.change(bench.getAllByLabelText('Peso (kg)')[0], { target: { value: '65' } })
+    expect(updateSet).toHaveBeenCalledWith({ id: 'bench-1', patch: { weight: 65 } }, expect.anything())
+
+    fireEvent.click(bench.getByRole('button', { name: 'Opciones del set 1' }))
+    expect(screen.queryByRole('button', { name: 'Desmarcar set' })).not.toBeInTheDocument()
+    expect(toggleCompleted).not.toHaveBeenCalled()
+  })
+
+  it('dates a set completed while editing a finished workout at the workout finish time', () => {
+    useWorkoutQuery.mockReturnValue({
+      data: { ...workout(), finished_at: '2026-01-10T11:00:00Z' },
+      isLoading: false,
+    })
+    renderPage()
+
+    fireEvent.click(within(panel('Bench Press')).getByRole('button', { name: 'Completar set' }))
+
+    expect(toggleCompleted).toHaveBeenCalledWith(
+      { id: 'bench-2', completed: true, completedAt: '2026-01-10T11:00:00Z' },
+      expect.anything(),
+    )
+  })
+
+  it('matches each repeat of an exercise to its own routine target and previous block', () => {
+    const data = workout()
+    data.workout_exercises[1] = {
+      ...data.workout_exercises[1],
+      exercise_id: 'ex-bench',
+      set_entries: [set('bench-b1', 'we-row', 'ex-bench')],
+    }
+    useWorkoutQuery.mockReturnValue({ data, isLoading: false })
+    renderPage()
+
+    expect(screen.getAllByText('Planeado: 2 x 8-10')).toHaveLength(1)
+    expect(usePreviousSessionSetsQuery).toHaveBeenCalledWith('ex-bench', 'workout-1', 0)
+    expect(usePreviousSessionSetsQuery).toHaveBeenCalledWith('ex-bench', 'workout-1', 1)
+  })
+
   it('closes a finished workout straight back to its summary', async () => {
     useWorkoutQuery.mockReturnValue({
       data: { ...workout(), finished_at: '2026-01-10T11:00:00Z' },

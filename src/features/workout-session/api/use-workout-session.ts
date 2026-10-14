@@ -29,8 +29,8 @@ export const workoutQueryKeys = {
   routineTargets: (routineId: string) => ['routine-targets', routineId] as const,
   lastWeight: (exerciseId: string, excludeWorkoutId: string) =>
     ['workouts', 'last-weight', exerciseId, excludeWorkoutId] as const,
-  previousSets: (exerciseId: string, excludeWorkoutId: string) =>
-    ['workouts', 'previous-sets', exerciseId, excludeWorkoutId] as const,
+  previousSets: (exerciseId: string, excludeWorkoutId: string, occurrence: number) =>
+    ['workouts', 'previous-sets', exerciseId, excludeWorkoutId, occurrence] as const,
   equipment: ['user-equipment'] as const,
 }
 
@@ -61,10 +61,10 @@ export function useLastLoggedWeightQuery(exerciseId: string, excludeWorkoutId: s
   })
 }
 
-export function usePreviousSessionSetsQuery(exerciseId: string, excludeWorkoutId: string) {
+export function usePreviousSessionSetsQuery(exerciseId: string, excludeWorkoutId: string, occurrence = 0) {
   return useQuery({
-    queryKey: workoutQueryKeys.previousSets(exerciseId, excludeWorkoutId),
-    queryFn: () => getPreviousSessionSets(exerciseId, excludeWorkoutId),
+    queryKey: workoutQueryKeys.previousSets(exerciseId, excludeWorkoutId, occurrence),
+    queryFn: () => getPreviousSessionSets(exerciseId, excludeWorkoutId, occurrence),
   })
 }
 
@@ -171,7 +171,8 @@ export function useToggleCompletedMutation(workoutId: string) {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ id, completed }: { id: string; completed: boolean }) => toggleCompleted(id, completed),
+    mutationFn: ({ id, completed, completedAt }: { id: string; completed: boolean; completedAt?: string }) =>
+      toggleCompleted(id, completed, completedAt),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: workoutQueryKeys.detail(workoutId) })
     },
