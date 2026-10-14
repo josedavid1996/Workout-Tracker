@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { daysSince } from '../../../shared/lib/days-since'
 import { lastUsedLabel } from '../../../shared/lib/last-used-label'
 import { initials } from '../../../shared/lib/initials'
@@ -17,8 +17,17 @@ import type { WorkoutHistoryItem } from '../../history/api/history'
 import { computeStreakDays } from '../../history/lib/streak'
 import { useRoutinesWithExercisesQuery } from '../../routines/api/use-routines'
 import { estimateWorkoutMinutes } from '../../routines/lib/routine-summary'
+import { useActiveWorkoutQuery, useStartWorkoutMutation } from '../../workout-session/api/use-workout-session'
+import type { FeaturedReason } from '../lib/featured-routine'
+import { pickFeaturedRoutine, todayDayOfWeek } from '../lib/featured-routine'
 
 const RECENT_ACTIVITY_LIMIT = 3
+
+const FEATURED_LABELS: Record<FeaturedReason, string> = {
+  today: 'Hoy toca',
+  recent: 'Última rutina',
+  newest: 'Tu rutina',
+}
 
 function formatHeaderDate(date: Date): string {
   const weekday = date.toLocaleDateString('es-ES', { weekday: 'short' }).replace('.', '').toUpperCase()
@@ -34,10 +43,13 @@ function formatVolume(volumeKg: number): string {
 
 // `/` — dashboard. Real data only, reusing existing feature api/hooks (no
 // new tables): `history` (finished-workout list + aggregated stats) and
-// `routines` (for the "hoy toca" fallback + exercise count). See per-tile
+// `routines` (the one-tap featured routine + exercise count). See per-tile
 // heuristics inline below and in `features/history/lib/{streak,home-stats}.ts`.
 export function HomePage() {
   const { session } = useSession()
+  const navigate = useNavigate()
+  const activeWorkoutQuery = useActiveWorkoutQuery()
+  const startMutation = useStartWorkoutMutation()
   const historyQuery = useWorkoutHistoryQuery()
   const statsQuery = useHomeStatsQuery()
   const routinesQuery = useRoutinesWithExercisesQuery()
@@ -48,16 +60,31 @@ export function HomePage() {
   const history = historyQuery.data ?? []
   const routines = routinesQuery.data ?? []
 
-  // "Hoy toca" heuristic: the model has no "today's routine" concept, so
-  // this uses the most recently used routine (from the most recent
-  // finished workout that has one) and falls back to the user's most
-  // recently created routine when nothing has been logged yet.
+  // The featured card starts its routine in one tap: today's routine by
+  // `day_of_week`, else the last one used — see `featured-routine.ts`.
   const mostRecentWithRoutine = history.find((item) => item.routineId !== null)
-  const featuredRoutineId = mostRecentWithRoutine?.routineId ?? routines[0]?.id ?? null
-  const featuredRoutine = routines.find((routine) => routine.id === featuredRoutineId) ?? null
-  const featuredHistoryItem = featuredRoutineId
-    ? (history.find((item) => item.routineId === featuredRoutineId) ?? null)
+  const featured = pickFeaturedRoutine({
+    routines,
+    lastUsedRoutineId: mostRecentWithRoutine?.routineId ?? null,
+    dayOfWeek: todayDayOfWeek(new Date()),
+  })
+  const featuredRoutine = featured?.routine ?? null
+  const featuredHistoryItem = featuredRoutine
+    ? (history.find((item) => item.routineId === featuredRoutine.id) ?? null)
     : null
+  // At most one workout can be active (`workouts_single_active_idx`), so
+  // while one is open the card resumes it instead of starting another.
+  const activeWorkout = activeWorkoutQuery.data ?? null
+
+  async function handleStartFeatured() {
+    if (activeWorkout) {
+      navigate(`/workout/${activeWorkout.id}`)
+      return
+    }
+    if (!featuredRoutine) return
+    const workout = await startMutation.mutateAsync(featuredRoutine.id)
+    navigate(`/workout/${workout.id}`)
+  }
 
   // Real, computed streak — not a placeholder — see
   // `features/history/lib/streak.ts#computeStreakDays`.
@@ -84,15 +111,20 @@ export function HomePage() {
         {isLoading && <p className="text-muted">Cargando...</p>}
         {historyQuery.isError && <p className="text-sm text-red-400">No se pudo cargar la actividad reciente.</p>}
 
-        {!isLoading && !featuredRoutineId && <EmptyHomeState />}
+        {!isLoading && !featuredRoutine && <EmptyHomeState />}
 
-        {!isLoading && featuredRoutineId && featuredRoutine && (
+        {!isLoading && featured && featuredRoutine && (
           <FeaturedRoutineCard
+            label={FEATURED_LABELS[featured.reason]}
             routineName={featuredRoutine.name}
             exerciseCount={featuredRoutine.routine_exercises.length}
             historyItem={featuredHistoryItem}
+            hasActiveWorkout={activeWorkout !== null}
+            isStarting={startMutation.isPending}
+            onStart={handleStartFeatured}
           />
         )}
+        {startMutation.isError && <p className="text-sm text-red-400">No se pudo iniciar el workout.</p>}
 
         <div className="flex gap-2">
           <StatTile label="Sesiones" value={String(statsQuery.data?.sessions ?? 0)} />
@@ -159,13 +191,21 @@ function RecentActivityRow({ item }: { item: WorkoutHistoryItem }) {
 }
 
 function FeaturedRoutineCard({
+  label,
   routineName,
   exerciseCount,
   historyItem,
+  hasActiveWorkout,
+  isStarting,
+  onStart,
 }: {
+  label: string
   routineName: string
   exerciseCount: number
   historyItem: Pick<WorkoutHistoryItem, 'duration' | 'createdAt'> | null
+  hasActiveWorkout: boolean
+  isStarting: boolean
+  onStart: () => void
 }) {
   // When the routine was actually run before, show its real recorded
   // duration; otherwise fall back to the documented per-exercise estimate
@@ -181,7 +221,7 @@ function FeaturedRoutineCard({
         className="pointer-events-none absolute -top-6 -right-6 h-24 w-24 opacity-20"
       />
       <div className="relative flex flex-col gap-2">
-        <span className="font-mono text-xs uppercase tracking-wide text-muted">Hoy toca</span>
+        <span className="font-mono text-xs uppercase tracking-wide text-muted">{label}</span>
         <span className="font-display text-xl font-extrabold uppercase tracking-wide text-foreground">
           {routineName}
         </span>
@@ -189,12 +229,20 @@ function FeaturedRoutineCard({
           {exerciseCount} ejercicios · {minutesLabel}
         </span>
         <span className="text-xs text-muted">{lastUsedText}</span>
-        <Link to="/workout/start">
-          <Button className="mt-1 flex w-full items-center justify-center gap-2">
-            <img src={iconPlay} alt="" className="h-4 w-4" />
-            Iniciar workout
-          </Button>
-        </Link>
+        <Button
+          type="button"
+          className="mt-1 flex w-full items-center justify-center gap-2"
+          disabled={isStarting}
+          onClick={onStart}
+        >
+          <img src={iconPlay} alt="" className="h-4 w-4" />
+          {hasActiveWorkout ? 'Continuar workout' : isStarting ? 'Iniciando...' : 'Iniciar workout'}
+        </Button>
+        {!hasActiveWorkout && (
+          <Link to="/workout/start" className="text-center text-xs text-data hover:underline">
+            Otra rutina o freestyle
+          </Link>
+        )}
       </div>
     </div>
   )

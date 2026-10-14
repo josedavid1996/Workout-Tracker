@@ -69,8 +69,15 @@ export function useUserEquipmentQuery() {
 }
 
 export function useStartWorkoutMutation() {
+  const queryClient = useQueryClient()
+
   return useMutation({
     mutationFn: (routineId: string | null) => startWorkout(routineId),
+    // Screens that offer "start" (home, start page) also read the active
+    // workout to offer "continue" instead.
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: workoutQueryKeys.active })
+    },
   })
 }
 
