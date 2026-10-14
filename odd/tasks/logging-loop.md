@@ -48,7 +48,7 @@ Route evidence: no Writer trigger fires (units share `workout-session-page.tsx` 
 
 Review: `gentle-ai review assess --base-ref main --committed-only` → risk `medium`, `review_due: false` (`under_budget`) after b9674a0 and after ba63162; no native review started.
 
-Delivery: 7 work-unit commits on `feat/logging-loop`, about 2,500 changed lines against `main` (over the ~400 heuristic). Not pushed; PR slicing (`stacked-to-main` or `feature-branch-chain`) is the user's call.
+Delivery: 8 work-unit commits on `feat/logging-loop`, about 2,500 changed lines against `main` (over the ~400 heuristic). Not pushed; PR slicing (`stacked-to-main` or `feature-branch-chain`) is the user's call.
 
 ## Log
 
@@ -59,3 +59,6 @@ Delivery: 7 work-unit commits on `feat/logging-loop`, about 2,500 changed lines 
 - L5: Not exercised against a real Supabase instance or a real phone: `npm run e2e` and `npm run test:rls` need live credentials. Verified with `npx vitest run` (53 files, 479 tests), `npx tsc -b`, `npm run lint`, `npm run build`.
 - L6: `set_entries` deletes and the `workouts` delete rely on the existing `for all` owner policies (`0003_rls.sql`) and `on delete cascade` FKs (`0001_core_schema.sql`); no migration was added.
 - L7: A swap is several separate writes (no transaction, no server layer); a failure midway can leave the original removed without its replacement. The page refetches after any swap so it shows what is really stored.
+- L8: Independent verifier (read-only, scratch copy) on ba63162: S3–S7, S9, S10 met; three blockers — B1 a 0-rep failure set from last time made the prefill insert violate the reps check; B2 un-complete/re-complete on a finished workout re-dated the set to today; B3 routine targets keyed by `exercise_id` collapsed a repeated exercise. Fixed in 20bd9fd with a regression test each (RED→GREEN).
+- L9: Recheck limited to B1–B3 on 20bd9fd: all three FIXED; `npx vitest run` 53 files / 487 tests, `npx tsc -b` and `npm run lint` clean. Parent spot check: same three commands plus `npm run build` on 20bd9fd.
+- L10: Open advisories (not fixed): bodyweight exercises with no history need "0" typed once per session; pending pre-filled rows have no stable order after a reload until migration 0006 is applied; adding or swapping an exercise on a finished workout leaves pending rows; the weekly streak uses UTC weeks; previous-session blocks of a repeated exercise are ordered by their first completed set.
