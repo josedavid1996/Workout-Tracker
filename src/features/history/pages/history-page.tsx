@@ -8,10 +8,12 @@ import { IconButton } from '../../../shared/ui/icon-button'
 import { Skeleton } from '../../../shared/ui/skeleton'
 import { useRoutinesQuery } from '../../routines/api/use-routines'
 import { useActiveWorkoutQuery } from '../../workout-session/api/use-workout-session'
-import { useWorkoutHistoryQuery } from '../api/use-history'
+import { primaryMuscleLabel } from '../../exercises/lib/exercise-labels'
+import { useMuscleSetsQuery, useWorkoutHistoryQuery } from '../api/use-history'
 import type { WorkoutHistoryItem } from '../api/history'
 import type { HeatmapDay } from '../lib/heatmap'
 import { computeMonthHeatmap, padHeatmapWeeks } from '../lib/heatmap'
+import { countSetsByMuscle } from '../lib/muscle-balance'
 
 // `null` = "Todas" (no filter), `'freestyle'` = only workouts with no
 // routine, otherwise an actual routine id.
@@ -118,6 +120,8 @@ export function HistoryPage() {
               onNextMonth={monthOffset < 0 ? () => setMonthOffset((offset) => offset + 1) : undefined}
             />
 
+            <MuscleBalanceCard sinceIso={weekStart.toISOString()} />
+
             <span className="font-mono text-xs uppercase tracking-wider text-muted">Esta semana</span>
 
             {thisWeekItems.length === 0 && (
@@ -172,6 +176,37 @@ export function HistoryPage() {
 
       <BottomNav />
     </div>
+  )
+}
+
+// Sets per main muscle since Monday, as plain proportional bars. Counts
+// countable sets only (completed, not warm-up), and names each muscle by the
+// exercise's focus tag when it has one, else its catalog target.
+function MuscleBalanceCard({ sinceIso }: { sinceIso: string }) {
+  const muscleSetsQuery = useMuscleSetsQuery(sinceIso)
+  const counts = countSetsByMuscle(muscleSetsQuery.data ?? [], primaryMuscleLabel)
+  const maxSets = counts[0]?.sets ?? 0
+
+  if (muscleSetsQuery.isLoading || muscleSetsQuery.isError || counts.length === 0) return null
+
+  return (
+    <section className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-4">
+      <h2 className="font-mono text-xs uppercase tracking-wider text-muted">Sets por músculo · esta semana</h2>
+      <ul className="flex flex-col gap-2">
+        {counts.map((entry) => (
+          <li key={entry.muscle} className="grid grid-cols-[7.5rem_1fr_1.5rem] items-center gap-2">
+            <span className="truncate text-xs text-foreground">{entry.muscle}</span>
+            <span className="h-1.5 overflow-hidden rounded-full bg-surface-2">
+              <span
+                className="block h-full rounded-full bg-accent"
+                style={{ width: `${(entry.sets / maxSets) * 100}%` }}
+              />
+            </span>
+            <span className="text-right font-mono text-xs text-muted">{entry.sets}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }
 

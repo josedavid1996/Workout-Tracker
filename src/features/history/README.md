@@ -25,3 +25,12 @@ sets breakdown) instead of a separate `/history/:workoutId` route — that
 page was already the read-only view for a finished workout (no edit
 affordances once `finished_at` is set), so a second route would only
 duplicate it.
+
+**Sets por músculo** (`lib/muscle-balance.ts`, `api/history.ts#fetchMuscleSetsSince`):
+`/history` shows how many countable sets each main muscle got since Monday.
+A muscle is named by the exercise's `exercise_focus` tag when it has one,
+else by its catalog `target`.
+
+**Racha** (`lib/streak.ts#computeStreakWeeks`): the home streak counts
+consecutive calendar weeks with at least one workout, so rest days don't
+break it. `computeStreakDays` is kept but no longer shown.

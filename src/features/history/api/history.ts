@@ -7,6 +7,7 @@ import { formatDuration } from '../../workout-session/lib/format-duration'
 import { toCountableSet } from '../../workout-session/lib/to-countable-set'
 import type { HomeStats } from '../lib/home-stats'
 import { computeHomeStats } from '../lib/home-stats'
+import type { MuscleSetRow } from '../lib/muscle-balance'
 
 // Same untyped-client cast used across other feature `api/` modules until
 // `database.types.ts` is generated — see `features/routines/api/routines.ts`.
@@ -119,4 +120,44 @@ export async function fetchHomeStats(): Promise<HomeStats> {
   }))
 
   return computeHomeStats(workouts)
+}
+
+// One row per countable set completed since `sinceIso`, carrying what is
+// needed to name its main muscle: the exercise's focus tag (`exercise_focus`,
+// migration 0011) and its catalog `target` as fallback. The focus lookup
+// degrades to "no focus" on failure (e.g. 0011 not applied), same as
+// `exercises.ts#fetchSimilarExercises`.
+export async function fetchMuscleSetsSince(sinceIso: string): Promise<MuscleSetRow[]> {
+  const { data: setRows, error: setError } = await db
+    .from('set_entries')
+    .select('exercise_id, tag, completed')
+    .eq('completed', true)
+    .gte('completed_at', sinceIso)
+
+  if (setError) throw setError
+
+  const sets = ((setRows as Pick<SetEntry, 'exercise_id' | 'tag' | 'completed'>[] | null) ?? []).filter(isCountable)
+  if (sets.length === 0) return []
+
+  const exerciseIds = Array.from(new Set(sets.map((set) => set.exercise_id)))
+
+  const [focusResult, exerciseResult] = await Promise.all([
+    db.from('exercise_focus').select('exercise_id, focus').in('exercise_id', exerciseIds),
+    db.from('exercises').select('id, target').in('id', exerciseIds),
+  ])
+  if (exerciseResult.error) throw exerciseResult.error
+
+  const focusById = new Map(
+    (focusResult.error ? [] : ((focusResult.data as { exercise_id: string; focus: string }[] | null) ?? [])).map(
+      (row) => [row.exercise_id, row.focus],
+    ),
+  )
+  const targetById = new Map(
+    ((exerciseResult.data as { id: string; target: string | null }[] | null) ?? []).map((row) => [row.id, row.target]),
+  )
+
+  return sets.map((set) => ({
+    focus: focusById.get(set.exercise_id) ?? null,
+    target: targetById.get(set.exercise_id) ?? null,
+  }))
 }
