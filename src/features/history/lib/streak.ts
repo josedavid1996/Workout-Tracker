@@ -45,3 +45,36 @@ export function computeStreakDays(
 
   return streak
 }
+
+const ONE_WEEK_MS = 7 * ONE_DAY_MS
+
+// Monday (UTC) of the week a day belongs to, as a UTC timestamp.
+function weekStartMs(dayKey: string): number {
+  const dayMs = dayKeyToUtcMs(dayKey)
+  const daysSinceMonday = (new Date(dayMs).getUTCDay() + 6) % 7
+  return dayMs - daysSinceMonday * ONE_DAY_MS
+}
+
+// Streak in WEEKS: consecutive calendar weeks (Monday to Sunday) with at
+// least one finished workout. Rest days never break it, and neither does a
+// current week with no workout yet — the streak is only lost once a whole
+// week goes by empty. This is what the home screen shows; `computeStreakDays`
+// above broke on every rest day.
+export function computeStreakWeeks(
+  workoutDates: string[],
+  referenceIso: string = new Date().toISOString(),
+): number {
+  const trainedWeeks = new Set(workoutDates.map((iso) => weekStartMs(toDayKey(iso))))
+  if (trainedWeeks.size === 0) return 0
+
+  let week = weekStartMs(toDayKey(referenceIso))
+  if (!trainedWeeks.has(week)) week -= ONE_WEEK_MS
+
+  let streak = 0
+  while (trainedWeeks.has(week)) {
+    streak += 1
+    week -= ONE_WEEK_MS
+  }
+
+  return streak
+}

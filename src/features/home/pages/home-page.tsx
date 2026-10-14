@@ -14,7 +14,7 @@ import iconRoutineList from '../../../assets/icons/icon-routine-list.svg'
 import { useSession } from '../../auth/api/use-session'
 import { useHomeStatsQuery, useWorkoutHistoryQuery } from '../../history/api/use-history'
 import type { WorkoutHistoryItem } from '../../history/api/history'
-import { computeStreakDays } from '../../history/lib/streak'
+import { computeStreakWeeks } from '../../history/lib/streak'
 import { useRoutinesWithExercisesQuery } from '../../routines/api/use-routines'
 import { estimateWorkoutMinutes } from '../../routines/lib/routine-summary'
 import { useActiveWorkoutQuery, useStartWorkoutMutation } from '../../workout-session/api/use-workout-session'
@@ -87,8 +87,8 @@ export function HomePage() {
   }
 
   // Real, computed streak — not a placeholder — see
-  // `features/history/lib/streak.ts#computeStreakDays`.
-  const streakDays = computeStreakDays(history.map((item) => item.finishedAt))
+  // `features/history/lib/streak.ts#computeStreakWeeks`.
+  const streakWeeks = computeStreakWeeks(history.map((item) => item.finishedAt))
   const recentActivity = history.slice(0, RECENT_ACTIVITY_LIMIT)
 
   const isLoading = historyQuery.isLoading || routinesQuery.isLoading
@@ -139,11 +139,11 @@ export function HomePage() {
         <div className="flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3">
           <div className="flex flex-1 flex-col">
             <span className="font-display text-sm uppercase tracking-wide text-foreground">Racha activa</span>
-            <span className="text-xs text-muted">Días seguidos entrenando</span>
+            <span className="text-xs text-muted">Semanas seguidas entrenando</span>
           </div>
           <span className="font-mono text-lg text-foreground">
-            {streakDays}
-            <span className="text-muted">d</span>
+            {streakWeeks}
+            <span className="text-muted">sem</span>
           </span>
         </div>
 

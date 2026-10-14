@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computeStreakDays } from './streak'
+import { computeStreakDays, computeStreakWeeks } from './streak'
 
 const REF = '2026-01-10T12:00:00Z' // Saturday, reference "today"
 
@@ -46,5 +46,39 @@ describe('computeStreakDays', () => {
         REF,
       ),
     ).toBe(2)
+  })
+})
+
+describe('computeStreakWeeks', () => {
+  // 2026-10-14 is a Wednesday; its week runs Mon 2026-10-12 .. Sun 2026-10-18.
+  const reference = '2026-10-14T12:00:00.000Z'
+
+  it('returns 0 with no workout dates', () => {
+    expect(computeStreakWeeks([], reference)).toBe(0)
+  })
+
+  it('counts consecutive calendar weeks with at least one workout, rest days included', () => {
+    expect(
+      computeStreakWeeks(
+        ['2026-10-13T10:00:00.000Z', '2026-10-05T10:00:00.000Z', '2026-10-01T10:00:00.000Z', '2026-09-28T10:00:00.000Z'],
+        reference,
+      ),
+    ).toBe(3)
+  })
+
+  it('is not broken by a current week with no workout yet', () => {
+    expect(computeStreakWeeks(['2026-10-11T10:00:00.000Z', '2026-10-04T10:00:00.000Z'], reference)).toBe(2)
+  })
+
+  it('returns 0 when neither this week nor last week has a workout', () => {
+    expect(computeStreakWeeks(['2026-09-30T10:00:00.000Z'], reference)).toBe(0)
+  })
+
+  it('stops at the first empty week', () => {
+    expect(computeStreakWeeks(['2026-10-12T10:00:00.000Z', '2026-09-21T10:00:00.000Z'], reference)).toBe(1)
+  })
+
+  it('counts several workouts in the same week once', () => {
+    expect(computeStreakWeeks(['2026-10-12T10:00:00.000Z', '2026-10-13T10:00:00.000Z'], reference)).toBe(1)
   })
 })
