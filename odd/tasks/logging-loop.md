@@ -31,20 +31,24 @@ Assumptions (assistant's, not the user's words):
 
 ## Tasks
 
-- [x] T0 · S1 · inline · doc updated (commit with T1)
-- [ ] T1 · S2 · inline
-- [ ] T2 · S3 · inline
-- [ ] T3 · S4 · inline
-- [ ] T4 · S5 · inline
-- [ ] T5 · S6 · inline
-- [ ] T6 · S7 · inline
-- [ ] T7 · S8 · inline
-- [ ] T8 · S9 · inline
-- [ ] T9 · S10 · inline
-- [ ] T10 · S11 · inline
-- [ ] T11 · S12 · blocked on A4 (needs the user's decision)
+- [x] T0 · S1 · inline · b9674a0
+- [x] T1 · S2 · inline · b9674a0 · RED→GREEN on the API tests; the pure lib tests were written together with the code
+- [x] T2 · S3 · inline · 700fc9d · RED→GREEN (`featured-routine.test.ts`)
+- [x] T3 · S4 · inline · d4c4d64 · RED→GREEN on the API tests; page tests written after the page
+- [x] T4 · S5 · inline · a4c66db · RED→GREEN (`use-wake-lock.test.ts`)
+- [x] T5 · S6 · inline · d4c4d64 · same commit as T3 (both rewrite `workout-session-page.tsx`)
+- [x] T6 · S7 · inline · 1a8992a · RED→GREEN (`streak.test.ts`)
+- [x] T7 · S8 · inline · d4c4d64 · covered by the page test ("routine note")
+- [x] T8 · S9 · inline · 2850102 · RED→GREEN (`session-comparison.test.ts`)
+- [x] T9 · S10 · inline · ba63162 · RED→GREEN (`muscle-balance.test.ts`, `history.test.ts`)
+- [x] T10 · S11 · inline · 2850102 · RED→GREEN (page tests for a finished workout)
+- [ ] T11 · S12 · blocked on A4 — **Needs your decision**: it needs a new migration applied to the live Supabase instance.
 
-Route evidence: no Writer trigger fires (units share `workout-session-page.tsx` and `workout-session.ts`, so they are not disjoint); the parent writes inline.
+Route evidence: no Writer trigger fires (units share `workout-session-page.tsx` and `workout-session.ts`, so they are not disjoint); the parent wrote inline.
+
+Review: `gentle-ai review assess --base-ref main --committed-only` → risk `medium`, `review_due: false` (`under_budget`) after b9674a0 and after ba63162; no native review started.
+
+Delivery: 7 work-unit commits on `feat/logging-loop`, about 2,500 changed lines against `main` (over the ~400 heuristic). Not pushed; PR slicing (`stacked-to-main` or `feature-branch-chain`) is the user's call.
 
 ## Log
 
@@ -52,3 +56,6 @@ Route evidence: no Writer trigger fires (units share `workout-session-page.tsx` 
 - L2 (2026-10-13, user, earlier turn): "me gusta muchas cosas de openGym, pero no me gudta nada de agregar temporizador ni nada de eso, que me recomiendas agregar a Workout-Tracker"
 - L3: Baseline on 33957c6: `npx vitest run` → 45 files, 408 tests passed.
 - L4: `set_entries.created_at` (migration 0006) is documented as not applied to the live instance, so set order cannot rely on it; sets are ordered client-side (completed first by `completed_at`).
+- L5: Not exercised against a real Supabase instance or a real phone: `npm run e2e` and `npm run test:rls` need live credentials. Verified with `npx vitest run` (53 files, 479 tests), `npx tsc -b`, `npm run lint`, `npm run build`.
+- L6: `set_entries` deletes and the `workouts` delete rely on the existing `for all` owner policies (`0003_rls.sql`) and `on delete cascade` FKs (`0001_core_schema.sql`); no migration was added.
+- L7: A swap is several separate writes (no transaction, no server layer); a failure midway can leave the original removed without its replacement. The page refetches after any swap so it shows what is really stored.
