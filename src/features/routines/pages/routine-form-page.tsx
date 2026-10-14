@@ -333,11 +333,8 @@ export function RoutineFormPage() {
         <form className="flex flex-col gap-3" onSubmit={handleConfirmExercise}>
           <Input
             label="Series objetivo"
-            type="number"
+            type="text"
             inputMode="numeric"
-            min={1}
-            max={20}
-            step={1}
             value={draftTargetSets}
             onChange={(event) => setDraftTargetSets(event.target.value)}
             error={targetsValidation.ok ? undefined : (targetsValidation.setsError ?? undefined)}

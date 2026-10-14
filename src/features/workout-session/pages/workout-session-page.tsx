@@ -10,7 +10,7 @@ import iconWarningSmall from '../../../assets/icons/icon-warning-small.svg'
 import { cx } from '../../../shared/lib/cx'
 import { useWakeLock } from '../../../shared/lib/use-wake-lock'
 import { Button } from '../../../shared/ui/button'
-import { Input } from '../../../shared/ui/input'
+import { NumberInput } from '../../../shared/ui/number-input'
 import { Sheet } from '../../../shared/ui/sheet'
 import type { Exercise } from '../../exercises/api/exercises'
 import { useExerciseFocusQuery, useExercisesByIdsQuery } from '../../exercises/api/use-exercises'
@@ -41,7 +41,7 @@ import { TagOverlay } from '../components/tag-overlay/tag-overlay'
 import { planExerciseSwap } from '../lib/exercise-swap'
 import type { NewSetDefaults } from '../lib/new-set-defaults'
 import { occurrenceIndexes } from '../lib/prefill-sets'
-import { newSetDefaults, parseWeightInput } from '../lib/new-set-defaults'
+import { newSetDefaults } from '../lib/new-set-defaults'
 import { reorderByRememberedIds } from '../lib/reorder-by-remembered-ids'
 import type { WeightOverride } from '../lib/session-sets'
 import { isWeightMissing, orderSets } from '../lib/session-sets'
@@ -107,9 +107,6 @@ function ExercisePanel({
   // The most recently completed countable set of the previous session.
   const lastWeight = previousSets.at(-1)?.weight ?? null
   const [quickReferenceOpen, setQuickReferenceOpen] = useState(false)
-  // Raw text typed in the current set's weight input, so the field shows
-  // exactly what was typed (including empty) while the update round-trips.
-  const [weightDrafts, setWeightDrafts] = useState<Record<string, string>>({})
   const focusQuery = useExerciseFocusQuery(exerciseInfo?.id)
   const muscleText = exerciseInfo ? primaryMuscleLabel(focusQuery.data?.focus, exerciseInfo.target) : ''
 
@@ -118,13 +115,6 @@ function ExercisePanel({
   const currentSet = currentSetIndex >= 0 ? sets[currentSetIndex] : undefined
   const weightMissing = (set: SetEntry) => isWeightMissing(set, weightOverrides.get(set.id))
   const currentWeightMissing = currentSet ? weightMissing(currentSet) : false
-
-  const weightInputValue = (set: SetEntry) => weightDrafts[set.id] ?? (weightMissing(set) ? '' : String(set.weight))
-
-  const handleWeightInput = (set: SetEntry, raw: string) => {
-    setWeightDrafts((current) => ({ ...current, [set.id]: raw }))
-    onChangeWeight(set.id, parseWeightInput(raw))
-  }
 
   const handleAddSet = () => {
     const previous = sets.at(-1)
@@ -201,7 +191,7 @@ function ExercisePanel({
           {/* `px-2` matches the data rows' own inset below (`rounded-lg border px-2`)
               — without it the header labels started 0.5rem to the left of their
               columns, making the spacing look uneven against the real data. */}
-          <div className="grid grid-cols-[2rem_1fr_3.5rem_3.5rem_2rem] gap-2 px-2 font-mono text-[10px] uppercase tracking-wide text-muted">
+          <div className="grid grid-cols-[1.75rem_1fr_4.25rem_3.25rem_1.75rem] gap-2 px-2 font-mono text-[10px] uppercase tracking-wide text-muted">
             <span>Set</span>
             <span>Anterior</span>
             <span>Kg</span>
@@ -220,7 +210,7 @@ function ExercisePanel({
                 <li
                   key={set.id}
                   className={cx(
-                    'grid grid-cols-[2rem_1fr_3.5rem_3.5rem_2rem] items-center gap-2 rounded-lg border px-2 py-1.5',
+                    'grid grid-cols-[1.75rem_1fr_4.25rem_3.25rem_1.75rem] items-center gap-2 rounded-lg border px-2 py-1.5',
                     set.completed && !hasError && 'border-positive/30 bg-positive/10',
                     isCurrent && !hasError && 'border-data bg-surface-2',
                     isFuture && 'border-transparent opacity-50',
@@ -243,28 +233,29 @@ function ExercisePanel({
                   </span>
 
                   {editable ? (
-                    <Input
+                    <NumberInput
                       aria-label="Peso (kg)"
-                      type="number"
-                      inputMode="decimal"
-                      min={0}
                       placeholder="kg"
-                      value={weightInputValue(set)}
-                      onChange={(event) => handleWeightInput(set, event.target.value)}
-                      className="w-full bg-surface-2 px-2 py-1 text-sm"
+                      value={weightMissing(set) ? null : set.weight}
+                      onValueChange={(weight) => onChangeWeight(set.id, weight)}
+                      className="w-full bg-surface-2 px-1.5 py-1"
                     />
                   ) : (
                     <span className="font-mono text-sm text-foreground">{weightMissing(set) ? '—' : `${set.weight}`}</span>
                   )}
 
                   {editable ? (
-                    <Input
+                    <NumberInput
                       aria-label="Reps"
-                      type="number"
-                      min={0}
+                      integer
+                      // 0 reps only exists for a set tagged "al fallo"
+                      // (0005_failure_reps_zero.sql).
+                      min={set.tag === 'failure' ? 0 : 1}
                       value={set.reps}
-                      onChange={(event) => onChangeReps(set.id, Number(event.target.value))}
-                      className="w-full bg-surface-2 px-2 py-1 text-sm"
+                      onValueChange={(reps) => {
+                        if (reps !== null) onChangeReps(set.id, reps)
+                      }}
+                      className="w-full bg-surface-2 px-1.5 py-1"
                     />
                   ) : (
                     <span className="font-mono text-sm text-foreground">{set.reps}</span>

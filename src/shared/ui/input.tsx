@@ -22,7 +22,10 @@ export function Input({ label, error, id, className, ...props }: InputProps) {
         id={inputId}
         aria-invalid={error ? true : undefined}
         className={cx(
-          'rounded-md border border-border bg-surface px-3 py-2 font-mono text-foreground placeholder:text-muted',
+          // `text-base` (16px) is deliberate: iOS Safari zooms the page when
+          // a focused field's font size is below 16px. Callers must not
+          // shrink it with a smaller `text-*` class.
+          'rounded-md border border-border bg-surface px-3 py-2 font-mono text-base text-foreground placeholder:text-muted',
           'focus:outline-none focus:ring-2 focus:ring-accent/50',
           error && 'border-red-500',
           className,

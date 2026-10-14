@@ -3,6 +3,8 @@
 // "Anterior" (last time) weight + planned reps → planned reps with an EMPTY
 // weight (`null`), which the user must fill in before completing the set.
 
+import { parseNumberInput } from '../../../shared/lib/parse-number'
+
 // Used only when there is neither a previous set nor a parseable plan;
 // `set_entries` requires `reps > 0`.
 export const FALLBACK_REPS = 8
@@ -31,8 +33,5 @@ export function newSetDefaults({ previousSet, lastWeight, plannedReps }: NewSetD
 // Weight input → kg. `null` means "no valid value" (empty, negative or not a
 // number) — never coerced to 0; an explicit "0" (bodyweight) is allowed.
 export function parseWeightInput(value: string): number | null {
-  const trimmed = value.trim()
-  if (trimmed === '') return null
-  const parsed = Number(trimmed)
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null
+  return parseNumberInput(value)
 }

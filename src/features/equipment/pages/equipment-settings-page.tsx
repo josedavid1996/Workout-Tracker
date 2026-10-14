@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { BottomNav } from '../../../shared/ui/bottom-nav'
 import { Button } from '../../../shared/ui/button'
-import { Input } from '../../../shared/ui/input'
+import { NumberInput } from '../../../shared/ui/number-input'
 import type { PlateInventory } from '../../../shared/lib/plates'
 import { useSaveUserEquipmentMutation, useUserEquipmentQuery } from '../api/use-equipment'
 
@@ -56,11 +56,13 @@ export function EquipmentSettingsPage() {
 
         {equipmentQuery.isLoading && <p className="text-muted">Cargando...</p>}
 
-        <Input
+        {/* An empty or invalid field keeps the last valid value. */}
+        <NumberInput
           label="Peso de la barra (kg)"
-          type="number"
           value={barWeight}
-          onChange={(event) => setBarWeightOverride(Number(event.target.value))}
+          onValueChange={(value) => {
+            if (value !== null) setBarWeightOverride(value)
+          }}
         />
 
         <div className="flex flex-col gap-2">
@@ -73,17 +75,20 @@ export function EquipmentSettingsPage() {
           <ul className="flex flex-col gap-2">
             {plates.map((plate, index) => (
               <li key={index} className="flex items-end gap-2">
-                <Input
+                <NumberInput
                   label="Peso (kg)"
-                  type="number"
                   value={plate.weight}
-                  onChange={(event) => updatePlateRow(index, { weight: Number(event.target.value) })}
+                  onValueChange={(value) => {
+                    if (value !== null) updatePlateRow(index, { weight: value })
+                  }}
                 />
-                <Input
+                <NumberInput
                   label="Cantidad"
-                  type="number"
+                  integer
                   value={plate.count}
-                  onChange={(event) => updatePlateRow(index, { count: Number(event.target.value) })}
+                  onValueChange={(value) => {
+                    if (value !== null) updatePlateRow(index, { count: value })
+                  }}
                 />
                 <Button type="button" variant="ghost" size="sm" onClick={() => removePlateRow(index)}>
                   Quitar
