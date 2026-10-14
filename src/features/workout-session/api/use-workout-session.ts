@@ -190,5 +190,14 @@ export function useFinishWorkoutMutation() {
   })
 }
 
+// After editing a FINISHED workout every derived view (history, stats,
+// records, charts) may have changed, so all cached queries are marked stale.
+export function useRefreshAllQueries() {
+  const queryClient = useQueryClient()
+  return () => {
+    queryClient.invalidateQueries()
+  }
+}
+
 // Re-exported so pages don't need to import `SetTag` from two places.
 export type { SetTag }

@@ -4,6 +4,7 @@ import iconCheckLarge from '../../../assets/icons/icon-check-large.svg'
 import iconDecorRings from '../../../assets/icons/icon-decor-rings.svg'
 import iconPrTrophy from '../../../assets/icons/icon-pr-trophy.svg'
 import iconShare from '../../../assets/icons/icon-share.svg'
+import { cx } from '../../../shared/lib/cx'
 import type { CountableSet } from '../../../shared/lib/countable-set'
 import { isCountable } from '../../../shared/lib/countable-set'
 import { sessionVolume } from '../../../shared/lib/volume'
@@ -16,6 +17,7 @@ import { exerciseHistoryQueryKeys } from '../../exercises/api/use-exercise-histo
 import { useExercisesByIdsQuery } from '../../exercises/api/use-exercises'
 import { detectNewPrs } from '../lib/new-prs'
 import { formatDuration } from '../lib/format-duration'
+import { compareWithPreviousSession, formatVolumeDelta } from '../lib/session-comparison'
 import { toCountableSet } from '../lib/to-countable-set'
 import { useWorkoutQuery } from '../api/use-workout-session'
 
@@ -187,6 +189,11 @@ export function WorkoutSummaryPage() {
                 return set.weight > best.weight ? set : best
               }, null)
               const exerciseVolume = sessionVolume(sets.map(toCountableSet))
+              // Today vs. the last earlier session of the same exercise.
+              const comparison = compareWithPreviousSession(
+                sets.map(toCountableSet),
+                historicalSetsByExercise.get(exercise.exercise_id) ?? [],
+              )
 
               return (
                 <li key={exercise.id}>
@@ -202,7 +209,19 @@ export function WorkoutSummaryPage() {
                         {sets.length} sets{topSet ? ` · top ${topSet.weight}kg x ${topSet.reps}` : ''}
                       </span>
                     </div>
-                    <span className="font-mono text-sm text-foreground">{exerciseVolume}</span>
+                    <div className="flex flex-col items-end">
+                      <span className="font-mono text-sm text-foreground">{exerciseVolume}</span>
+                      {comparison && (
+                        <span
+                          className={cx(
+                            'font-mono text-[11px]',
+                            comparison.volumeDelta > 0 ? 'text-positive' : 'text-muted',
+                          )}
+                        >
+                          {formatVolumeDelta(comparison.volumeDelta)}
+                        </span>
+                      )}
+                    </div>
                   </Link>
                 </li>
               )
@@ -218,6 +237,11 @@ export function WorkoutSummaryPage() {
             Guardar workout
           </Button>
         </div>
+        {workout.finished_at && (
+          <Button type="button" variant="ghost" onClick={() => navigate(`/workout/${workoutId}`)}>
+            Editar sets
+          </Button>
+        )}
       </div>
 
       <BottomNav />

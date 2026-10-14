@@ -26,6 +26,7 @@ import {
   useFinishWorkoutMutation,
   useLogSetMutation,
   usePreviousSessionSetsQuery,
+  useRefreshAllQueries,
   useRemoveWorkoutExerciseMutation,
   useReplaceWorkoutExerciseMutation,
   useRoutineTargetsQuery,
@@ -362,6 +363,7 @@ export function WorkoutSessionPage() {
   const deleteSetMutation = useDeleteSetMutation(workoutId)
   const discardMutation = useDiscardWorkoutMutation()
   const finishMutation = useFinishWorkoutMutation()
+  const refreshAllQueries = useRefreshAllQueries()
   const logSetMutation = useLogSetMutation(workoutId)
   const updateSetMutation = useUpdateSetMutation(workoutId)
   const toggleCompletedMutation = useToggleCompletedMutation(workoutId)
@@ -446,6 +448,10 @@ export function WorkoutSessionPage() {
   )
 
   const routineName = workout.routine_id ? (routineQuery.data?.name ?? '…') : 'Freestyle'
+  // A finished workout opened from its summary ("Editar sets"): same
+  // screen, but leaving it never touches `finished_at` (which would change
+  // its recorded duration) and it can't be discarded from here.
+  const isFinished = workout.finished_at !== null
   const menuExercise = exercises.find((exercise) => exercise.id === menuExerciseId)
   const menuExerciseHasCompletedSets = menuExercise?.set_entries.some((set) => set.completed) ?? false
   const swapExercise =
@@ -545,6 +551,11 @@ export function WorkoutSessionPage() {
     )
   }
 
+  function handleDoneEditing() {
+    refreshAllQueries()
+    navigate(`/workout/${workoutId}/summary`)
+  }
+
   async function handleFinish() {
     await finishMutation.mutateAsync(workoutId)
     navigate(`/workout/${workoutId}/summary`)
@@ -577,7 +588,11 @@ export function WorkoutSessionPage() {
   return (
     <div className="min-h-dvh bg-background pb-10">
       <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-border bg-surface px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))]">
-        <button type="button" aria-label="Cerrar" onClick={() => setCloseConfirmOpen(true)}>
+        <button
+          type="button"
+          aria-label="Cerrar"
+          onClick={() => (isFinished ? handleDoneEditing() : setCloseConfirmOpen(true))}
+        >
           <img src={iconClose} alt="" className="h-5 w-5" />
         </button>
         <span className="flex-1 min-w-0 truncate font-display text-sm font-bold uppercase tracking-wide text-foreground">
@@ -586,11 +601,11 @@ export function WorkoutSessionPage() {
         <Button
           type="button"
           variant="text"
-          onClick={handleFinish}
+          onClick={isFinished ? handleDoneEditing : handleFinish}
           disabled={finishMutation.isPending}
           className="font-mono text-sm font-bold uppercase text-positive"
         >
-          {finishMutation.isPending ? 'Terminando...' : 'Terminar'}
+          {isFinished ? 'Listo' : finishMutation.isPending ? 'Terminando...' : 'Terminar'}
         </Button>
       </header>
 

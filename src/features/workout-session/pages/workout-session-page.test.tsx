@@ -10,6 +10,8 @@ const removeExercise = vi.fn()
 const addExercise = vi.fn(() => Promise.resolve())
 const replaceExercise = vi.fn(() => Promise.resolve())
 const discardWorkout = vi.fn(() => Promise.resolve())
+const finishWorkout = vi.fn(() => Promise.resolve())
+const refreshAll = vi.fn()
 const useWorkoutQuery = vi.fn()
 const usePreviousSessionSetsQuery = vi.fn()
 
@@ -29,7 +31,8 @@ vi.mock('../api/use-workout-session', () => ({
   useAddWorkoutExerciseMutation: () => ({ ...idle, mutateAsync: addExercise }),
   useReplaceWorkoutExerciseMutation: () => ({ ...idle, mutateAsync: replaceExercise }),
   useDiscardWorkoutMutation: () => ({ ...idle, mutateAsync: discardWorkout }),
-  useFinishWorkoutMutation: () => ({ ...idle, mutateAsync: vi.fn() }),
+  useFinishWorkoutMutation: () => ({ ...idle, mutateAsync: finishWorkout }),
+  useRefreshAllQueries: () => refreshAll,
 }))
 
 const exerciseInfo = (id: string, name: string) => ({
@@ -118,6 +121,7 @@ function renderPage() {
     <MemoryRouter initialEntries={['/workout/workout-1']}>
       <Routes>
         <Route path="/workout/:id" element={<WorkoutSessionPage />} />
+        <Route path="/workout/:id/summary" element={<p>SUMMARY</p>} />
         <Route path="/" element={<p>HOME</p>} />
       </Routes>
     </MemoryRouter>,
@@ -277,5 +281,46 @@ describe('WorkoutSessionPage', () => {
 
     await waitFor(() => expect(discardWorkout).toHaveBeenCalledWith('workout-1'))
     expect(await screen.findByText('HOME')).toBeInTheDocument()
+  })
+
+  it('finishes an open workout from the header', async () => {
+    renderPage()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Terminar' }))
+
+    await waitFor(() => expect(finishWorkout).toHaveBeenCalledWith('workout-1'))
+    expect(await screen.findByText('SUMMARY')).toBeInTheDocument()
+  })
+
+  it('edits an already finished workout without finishing it again or offering to discard it', async () => {
+    useWorkoutQuery.mockReturnValue({
+      data: { ...workout(), finished_at: '2026-01-10T11:00:00Z' },
+      isLoading: false,
+    })
+    renderPage()
+
+    expect(screen.queryByRole('button', { name: 'Terminar' })).not.toBeInTheDocument()
+    fireEvent.click(within(panel('Bench Press')).getByRole('button', { name: 'Opciones del set 2' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Eliminar set' }))
+    expect(deleteSet).toHaveBeenCalledWith('bench-2')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Listo' }))
+
+    expect(finishWorkout).not.toHaveBeenCalled()
+    expect(refreshAll).toHaveBeenCalled()
+    expect(await screen.findByText('SUMMARY')).toBeInTheDocument()
+  })
+
+  it('closes a finished workout straight back to its summary', async () => {
+    useWorkoutQuery.mockReturnValue({
+      data: { ...workout(), finished_at: '2026-01-10T11:00:00Z' },
+      isLoading: false,
+    })
+    renderPage()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cerrar' }))
+
+    expect(screen.queryByRole('button', { name: 'Descartar workout' })).not.toBeInTheDocument()
+    expect(await screen.findByText('SUMMARY')).toBeInTheDocument()
   })
 })
