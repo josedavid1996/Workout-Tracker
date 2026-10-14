@@ -36,6 +36,7 @@ import {
   addWorkoutExercise,
   finishWorkout,
   getLastLoggedWeight,
+  getPreviousSessionSets,
   getUserEquipment,
   logSet,
   resumeActiveWorkout,
@@ -98,6 +99,93 @@ describe('startWorkout', () => {
     expect(workoutExercisesBuilder.insert).toHaveBeenCalledWith([
       expect.objectContaining({ workout_id: 'workout-1', exercise_id: 'ex-a', position: 0, user_id: 'user-1' }),
       expect.objectContaining({ workout_id: 'workout-1', exercise_id: 'ex-b', position: 1, user_id: 'user-1' }),
+    ])
+  })
+
+  it('pre-fills set rows from the routine targets and the previous session of each exercise', async () => {
+    getUser.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null })
+
+    const workoutBuilder = makeQueryBuilder({
+      data: { id: 'workout-1', routine_id: 'routine-1', notes: null, created_at: '2026-01-01', finished_at: null },
+      error: null,
+    })
+    const routineExercisesBuilder = makeQueryBuilder({
+      data: [
+        { exercise_id: 'ex-a', position: 0, target_sets: 2, target_reps: '8-10' },
+        { exercise_id: 'ex-b', position: 1, target_sets: 1, target_reps: null },
+      ],
+      error: null,
+    })
+    const workoutExercisesBuilder = makeQueryBuilder({
+      data: [
+        { id: 'we-a', exercise_id: 'ex-a', position: 0 },
+        { id: 'we-b', exercise_id: 'ex-b', position: 1 },
+      ],
+      error: null,
+    })
+    const setEntriesBuilder = makeQueryBuilder({ data: null, error: null })
+
+    from.mockImplementation((table: string) => {
+      if (table === 'workouts') return workoutBuilder
+      if (table === 'routine_exercises') return routineExercisesBuilder
+      if (table === 'workout_exercises') return workoutExercisesBuilder
+      return setEntriesBuilder
+    })
+    rpc.mockImplementation((_name: string, args: { p_exercise_id: string }) =>
+      Promise.resolve(
+        args.p_exercise_id === 'ex-a'
+          ? {
+              data: [
+                { workout_id: 'prev', weight: 62.5, reps: 8, completed_at: '2026-01-01T10:05:00Z' },
+                { workout_id: 'prev', weight: 60, reps: 10, completed_at: '2026-01-01T10:00:00Z' },
+              ],
+              error: null,
+            }
+          : { data: [], error: null },
+      ),
+    )
+
+    await startWorkout('routine-1')
+
+    expect(rpc).toHaveBeenCalledWith('countable_sets', { p_exercise_id: 'ex-a' })
+    expect(rpc).toHaveBeenCalledWith('countable_sets', { p_exercise_id: 'ex-b' })
+    const base = { workout_id: 'workout-1', user_id: 'user-1', tag: 'normal', completed: false }
+    expect(setEntriesBuilder.insert).toHaveBeenCalledWith([
+      { ...base, workout_exercise_id: 'we-a', exercise_id: 'ex-a', weight: 60, reps: 8 },
+      { ...base, workout_exercise_id: 'we-a', exercise_id: 'ex-a', weight: 62.5, reps: 8 },
+      { ...base, workout_exercise_id: 'we-b', exercise_id: 'ex-b', weight: 0, reps: 8 },
+    ])
+  })
+
+  it('still pre-fills rows (with an empty weight) when the history lookup fails', async () => {
+    getUser.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null })
+
+    const workoutBuilder = makeQueryBuilder({
+      data: { id: 'workout-1', routine_id: 'routine-1', notes: null, created_at: '2026-01-01', finished_at: null },
+      error: null,
+    })
+    const routineExercisesBuilder = makeQueryBuilder({
+      data: [{ exercise_id: 'ex-a', position: 0, target_sets: 1, target_reps: '5' }],
+      error: null,
+    })
+    const workoutExercisesBuilder = makeQueryBuilder({
+      data: [{ id: 'we-a', exercise_id: 'ex-a', position: 0 }],
+      error: null,
+    })
+    const setEntriesBuilder = makeQueryBuilder({ data: null, error: null })
+
+    from.mockImplementation((table: string) => {
+      if (table === 'workouts') return workoutBuilder
+      if (table === 'routine_exercises') return routineExercisesBuilder
+      if (table === 'workout_exercises') return workoutExercisesBuilder
+      return setEntriesBuilder
+    })
+    rpc.mockResolvedValue({ data: null, error: { message: 'rpc down' } })
+
+    await startWorkout('routine-1')
+
+    expect(setEntriesBuilder.insert).toHaveBeenCalledWith([
+      expect.objectContaining({ workout_exercise_id: 'we-a', weight: 0, reps: 5 }),
     ])
   })
 
@@ -270,6 +358,33 @@ describe('getLastLoggedWeight', () => {
 // test file — this only confirms the re-export from here still resolves to
 // that exact same function, so `use-workout-session.ts` and
 // `plate-calculator.tsx` keep working unchanged.
+describe('getPreviousSessionSets', () => {
+  it('returns the sets of the most recent other workout, oldest first', async () => {
+    rpc.mockResolvedValue({
+      data: [
+        { workout_id: 'current', weight: 70, reps: 5, completed_at: '2026-02-01T10:00:00Z' },
+        { workout_id: 'prev', weight: 62.5, reps: 8, completed_at: '2026-01-08T10:05:00Z' },
+        { workout_id: 'prev', weight: 60, reps: 10, completed_at: '2026-01-08T10:00:00Z' },
+        { workout_id: 'older', weight: 50, reps: 10, completed_at: '2026-01-01T10:00:00Z' },
+      ],
+      error: null,
+    })
+
+    const result = await getPreviousSessionSets('ex-a', 'current')
+
+    expect(rpc).toHaveBeenCalledWith('countable_sets', { p_exercise_id: 'ex-a' })
+    expect(result).toEqual([
+      { weight: 60, reps: 10 },
+      { weight: 62.5, reps: 8 },
+    ])
+  })
+
+  it('throws when the RPC fails', async () => {
+    rpc.mockResolvedValue({ data: null, error: new Error('rpc down') })
+    await expect(getPreviousSessionSets('ex-a', 'current')).rejects.toThrow('rpc down')
+  })
+})
+
 describe('getUserEquipment (re-export)', () => {
   it('re-exports the canonical implementation from the equipment feature', () => {
     expect(getUserEquipment).toBe(canonicalGetUserEquipment)

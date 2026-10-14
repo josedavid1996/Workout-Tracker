@@ -7,6 +7,7 @@ import {
   fetchWorkout,
   finishWorkout,
   getLastLoggedWeight,
+  getPreviousSessionSets,
   getUserEquipment,
   logSet,
   resumeActiveWorkout,
@@ -24,6 +25,8 @@ export const workoutQueryKeys = {
   routineTargets: (routineId: string) => ['routine-targets', routineId] as const,
   lastWeight: (exerciseId: string, excludeWorkoutId: string) =>
     ['workouts', 'last-weight', exerciseId, excludeWorkoutId] as const,
+  previousSets: (exerciseId: string, excludeWorkoutId: string) =>
+    ['workouts', 'previous-sets', exerciseId, excludeWorkoutId] as const,
   equipment: ['user-equipment'] as const,
 }
 
@@ -51,6 +54,13 @@ export function useLastLoggedWeightQuery(exerciseId: string, excludeWorkoutId: s
   return useQuery({
     queryKey: workoutQueryKeys.lastWeight(exerciseId, excludeWorkoutId),
     queryFn: () => getLastLoggedWeight(exerciseId, excludeWorkoutId),
+  })
+}
+
+export function usePreviousSessionSetsQuery(exerciseId: string, excludeWorkoutId: string) {
+  return useQuery({
+    queryKey: workoutQueryKeys.previousSets(exerciseId, excludeWorkoutId),
+    queryFn: () => getPreviousSessionSets(exerciseId, excludeWorkoutId),
   })
 }
 

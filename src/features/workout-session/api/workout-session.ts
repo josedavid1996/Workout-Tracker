@@ -3,6 +3,8 @@ import { supabase } from '../../../shared/supabase/client'
 import type { SetTag } from '../../../shared/lib/countable-set'
 import { getUserEquipment } from '../../equipment/api/equipment'
 import type { UserEquipment } from '../../equipment/api/equipment'
+import type { CountableSetRow, PreviousSet } from '../lib/prefill-sets'
+import { buildPrefilledSets, pickPreviousSessionSets } from '../lib/prefill-sets'
 
 // Same untyped-client cast used across other feature `api/` modules until
 // `database.types.ts` is generated — see `features/routines/api/routines.ts`.
@@ -67,11 +69,17 @@ async function requireUserId(): Promise<string> {
   return userId
 }
 
+type RoutineExerciseRow = {
+  exercise_id: string
+  position: number
+  target_sets: number | null
+  target_reps: string | null
+}
+
 // Creates the `workouts` row and, when started from a routine, pre-populates
-// `workout_exercises` in the routine's order. Freestyle (`routineId: null`)
-// starts with no exercises — they are added one at a time via
-// `addWorkoutExercise` before the first set is logged (see workout-session
-// pages for that "freestyle only, before any set" rule).
+// `workout_exercises` in the routine's order plus their set rows (see
+// `prefillSetRows`). Freestyle (`routineId: null`) starts with no exercises —
+// they are added one at a time via `addWorkoutExercise`.
 export async function startWorkout(routineId: string | null): Promise<Workout> {
   const userId = await requireUserId()
 
@@ -86,13 +94,14 @@ export async function startWorkout(routineId: string | null): Promise<Workout> {
   if (routineId) {
     const { data: routineExercises, error: routineExercisesError } = await db
       .from('routine_exercises')
-      .select('exercise_id, position')
+      .select('exercise_id, position, target_sets, target_reps')
       .eq('routine_id', routineId)
       .order('position', { ascending: true })
 
     if (routineExercisesError) throw routineExercisesError
 
-    const rows = ((routineExercises as { exercise_id: string; position: number }[] | null) ?? []).map((row) => ({
+    const planned = (routineExercises as RoutineExerciseRow[] | null) ?? []
+    const rows = planned.map((row) => ({
       workout_id: (workout as Workout).id,
       exercise_id: row.exercise_id,
       position: row.position,
@@ -100,12 +109,68 @@ export async function startWorkout(routineId: string | null): Promise<Workout> {
     }))
 
     if (rows.length > 0) {
-      const { error: insertError } = await db.from('workout_exercises').insert(rows)
+      const { data: inserted, error: insertError } = await db
+        .from('workout_exercises')
+        .insert(rows)
+        .select('id, exercise_id, position')
       if (insertError) throw insertError
+
+      const targetsByPosition = new Map(planned.map((row) => [row.position, row]))
+      await prefillSetRows(
+        userId,
+        (workout as Workout).id,
+        ((inserted as Pick<WorkoutExercise, 'id' | 'exercise_id' | 'position'>[] | null) ?? []).map((row) => ({
+          workoutExerciseId: row.id,
+          exerciseId: row.exercise_id,
+          targetSets: targetsByPosition.get(row.position)?.target_sets ?? null,
+          targetReps: targetsByPosition.get(row.position)?.target_reps ?? null,
+        })),
+      )
     }
   }
 
   return workout as Workout
+}
+
+type PrefillTarget = {
+  workoutExerciseId: string
+  exerciseId: string
+  targetSets: number | null
+  targetReps: string | null
+}
+
+// Creates the pending set rows of freshly added exercises, so logging is
+// "check what was planned" (`lib/prefill-sets.ts` holds the rules). A failed
+// history lookup only costs the weight prefill — the rows are still created.
+async function prefillSetRows(userId: string, workoutId: string, targets: PrefillTarget[]): Promise<void> {
+  const setRows = (
+    await Promise.all(
+      targets.map(async (target) => {
+        const previousSets = await getPreviousSessionSets(target.exerciseId, workoutId).catch(() => [])
+        return buildPrefilledSets({
+          targetSets: target.targetSets,
+          targetReps: target.targetReps,
+          previousSets,
+        }).map((set) => ({
+          workout_exercise_id: target.workoutExerciseId,
+          workout_id: workoutId,
+          exercise_id: target.exerciseId,
+          // NOT NULL column — an unknown weight is stored as 0 and shown
+          // empty until typed (`lib/session-sets.ts#isWeightMissing`).
+          weight: set.weight ?? 0,
+          reps: set.reps,
+          tag: 'normal' as const,
+          completed: false,
+          user_id: userId,
+        }))
+      }),
+    )
+  ).flat()
+
+  if (setRows.length === 0) return
+
+  const { error } = await db.from('set_entries').insert(setRows)
+  if (error) throw error
 }
 
 // At most one active (finished_at IS NULL) workout per user — enforced by
@@ -242,6 +307,16 @@ export async function getLastLoggedWeight(exerciseId: string, excludeWorkoutId: 
     .sort((a, b) => new Date(b.completed_at ?? 0).getTime() - new Date(a.completed_at ?? 0).getTime())
 
   return candidates[0]?.weight ?? null
+}
+
+// What was done last time for one exercise: the countable sets of its most
+// recent workout other than `excludeWorkoutId`, oldest-first. Same RPC and
+// client-side exclusion as `getLastLoggedWeight` above.
+export async function getPreviousSessionSets(exerciseId: string, excludeWorkoutId: string): Promise<PreviousSet[]> {
+  const { data, error } = await db.rpc('countable_sets', { p_exercise_id: exerciseId })
+  if (error) throw error
+
+  return pickPreviousSessionSets((data as CountableSetRow[] | null) ?? [], excludeWorkoutId)
 }
 
 // Re-exported from `features/equipment/api/equipment.ts` (Phase 10, PR5) —

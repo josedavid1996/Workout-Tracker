@@ -20,8 +20,8 @@ import { useRoutineQuery } from '../../routines/api/use-routines'
 import {
   useAddWorkoutExerciseMutation,
   useFinishWorkoutMutation,
-  useLastLoggedWeightQuery,
   useLogSetMutation,
+  usePreviousSessionSetsQuery,
   useRoutineTargetsQuery,
   useToggleCompletedMutation,
   useUpdateSetMutation,
@@ -34,6 +34,8 @@ import { TagOverlay } from '../components/tag-overlay/tag-overlay'
 import type { NewSetDefaults } from '../lib/new-set-defaults'
 import { newSetDefaults, parseWeightInput } from '../lib/new-set-defaults'
 import { reorderByRememberedIds } from '../lib/reorder-by-remembered-ids'
+import type { WeightOverride } from '../lib/session-sets'
+import { isWeightMissing, orderSets } from '../lib/session-sets'
 
 interface CurrentExercisePanelProps {
   workoutExercise: WorkoutExerciseWithSets
@@ -45,9 +47,9 @@ interface CurrentExercisePanelProps {
   onToggleSkip: () => void
   onOpenTagOverlay: (set: SetEntry) => void
   onOpenPlateCalculator: (weight: number) => void
-  // Sets whose weight is still unknown (added without any prefill, or
-  // cleared by the user) — shown empty and not completable until filled.
-  weightMissingSetIds: Set<string>
+  // Per-set answer to "is a stored 0 kg real?" — see `isWeightMissing`. A
+  // set with a missing weight shows empty and is not completable until filled.
+  weightOverrides: Map<string, WeightOverride>
   onLogSet: (defaults: NewSetDefaults) => void
   onCompleteSet: (set: SetEntry) => void
   onRetryComplete: (set: SetEntry) => void
@@ -57,11 +59,13 @@ interface CurrentExercisePanelProps {
 
 // One exercise at a time, matching `design/figma-reference/06-sesion-activa.md`:
 // SET/ANTERIOR/KG/REPS table with per-row states (completed=green,
-// current=blue-bordered+editable, future=dimmed dashes, error=red). Only the
-// first non-completed row is editable — this is the "current" set; every
-// later row is a placeholder until it becomes current. NO live timers
-// anywhere (decision already taken — see tasks.md), so there is no rest
-// countdown between sets, only a static reference to the last logged weight.
+// current=blue-bordered+editable, future=dimmed, error=red). Rows are
+// pre-filled when the workout starts (`startWorkout`), so the usual gesture
+// is just "Completar set". Only the first non-completed row is editable —
+// this is the "current" set; later rows show their planned values dimmed
+// until they become current. "Anterior" is what was done on the same set
+// last time. NO live timers anywhere (decision already taken — see
+// tasks.md), so there is no rest countdown between sets.
 function CurrentExercisePanel({
   workoutExercise,
   workoutId,
@@ -69,7 +73,7 @@ function CurrentExercisePanel({
   planned,
   skipped,
   erroredSetIds,
-  weightMissingSetIds,
+  weightOverrides,
   onToggleSkip,
   onOpenTagOverlay,
   onOpenPlateCalculator,
@@ -79,8 +83,10 @@ function CurrentExercisePanel({
   onChangeWeight,
   onChangeReps,
 }: CurrentExercisePanelProps) {
-  const lastWeightQuery = useLastLoggedWeightQuery(workoutExercise.exercise_id, workoutId)
-  const lastWeight = lastWeightQuery.data ?? null
+  const previousSetsQuery = usePreviousSessionSetsQuery(workoutExercise.exercise_id, workoutId)
+  const previousSets = previousSetsQuery.data ?? []
+  // The most recently completed countable set of the previous session.
+  const lastWeight = previousSets.at(-1)?.weight ?? null
   const [quickReferenceOpen, setQuickReferenceOpen] = useState(false)
   // Raw text typed in the current set's weight input, so the field shows
   // exactly what was typed (including empty) while the update round-trips.
@@ -91,10 +97,10 @@ function CurrentExercisePanel({
   const sets = workoutExercise.set_entries
   const currentSetIndex = sets.findIndex((set) => !set.completed)
   const currentSet = currentSetIndex >= 0 ? sets[currentSetIndex] : undefined
-  const currentWeightMissing = currentSet ? weightMissingSetIds.has(currentSet.id) : false
+  const weightMissing = (set: SetEntry) => isWeightMissing(set, weightOverrides.get(set.id))
+  const currentWeightMissing = currentSet ? weightMissing(currentSet) : false
 
-  const weightInputValue = (set: SetEntry) =>
-    weightDrafts[set.id] ?? (weightMissingSetIds.has(set.id) ? '' : String(set.weight))
+  const weightInputValue = (set: SetEntry) => weightDrafts[set.id] ?? (weightMissing(set) ? '' : String(set.weight))
 
   const handleWeightInput = (set: SetEntry, raw: string) => {
     setWeightDrafts((current) => ({ ...current, [set.id]: raw }))
@@ -105,7 +111,7 @@ function CurrentExercisePanel({
     const previous = sets.at(-1)
     onLogSet(
       newSetDefaults({
-        previousSet: previous && !weightMissingSetIds.has(previous.id) ? previous : null,
+        previousSet: previous && !weightMissing(previous) ? previous : null,
         lastWeight,
         plannedReps: planned?.targetReps ?? null,
       }),
@@ -210,7 +216,9 @@ function CurrentExercisePanel({
                   >
                     {index + 1}
                   </button>
-                  <span className="font-mono text-xs text-muted">{lastWeight != null ? `${lastWeight}kg` : '—'}</span>
+                  <span className="font-mono text-xs text-muted">
+                    {previousSets[index] ? `${previousSets[index].weight}×${previousSets[index].reps}` : '—'}
+                  </span>
 
                   {isCurrent ? (
                     <Input
@@ -224,7 +232,7 @@ function CurrentExercisePanel({
                       className="w-full bg-surface-2 px-2 py-1 text-sm"
                     />
                   ) : (
-                    <span className="font-mono text-sm text-foreground">{isFuture ? '—' : `${set.weight}`}</span>
+                    <span className="font-mono text-sm text-foreground">{weightMissing(set) ? '—' : `${set.weight}`}</span>
                   )}
 
                   {isCurrent ? (
@@ -237,7 +245,7 @@ function CurrentExercisePanel({
                       className="w-full bg-surface-2 px-2 py-1 text-sm"
                     />
                   ) : (
-                    <span className="font-mono text-sm text-foreground">{isFuture ? '—' : `${set.reps}`}</span>
+                    <span className="font-mono text-sm text-foreground">{set.reps}</span>
                   )}
 
                   <span className="flex justify-center">
@@ -360,7 +368,7 @@ export function WorkoutSessionPage() {
       .sort((a, b) => a.position - b.position)
       .map((exercise) => ({
         ...exercise,
-        set_entries: reorderByRememberedIds(exercise.set_entries, rememberedSetOrder.get(exercise.id)),
+        set_entries: reorderByRememberedIds(orderSets(exercise.set_entries), rememberedSetOrder.get(exercise.id)),
       }))
   }, [workout, rememberedSetOrder])
 
@@ -388,11 +396,12 @@ export function WorkoutSessionPage() {
   const [plateCalculatorWeight, setPlateCalculatorWeight] = useState<number | null>(null)
   const [skippedIds, setSkippedIds] = useState<Set<string>>(new Set())
   const [erroredSetIds, setErroredSetIds] = useState<Set<string>>(new Set())
-  // `set_entries.weight` is NOT NULL, so a set added without a known weight
-  // is stored as 0 but tracked here as "missing" — it shows empty and can't
-  // be completed until the user types a value (an explicit 0 is fine).
-  // Page-lifetime only: after a reload such a set shows its stored 0.
-  const [weightMissingSetIds, setWeightMissingSetIds] = useState<Set<string>>(new Set())
+  // `set_entries.weight` is NOT NULL, so an unknown weight is stored as 0 —
+  // a pending set at 0 kg shows empty and can't be completed until the user
+  // types a value. These overrides record what the user did with the field
+  // (cleared it, or typed an explicit 0). Page-lifetime only: after a reload
+  // an explicit pending 0 has to be typed again.
+  const [weightOverrides, setWeightOverrides] = useState<Map<string, WeightOverride>>(new Map())
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false)
 
   // Derived, not stored: clamp defensively during render instead of via an
@@ -442,11 +451,11 @@ export function WorkoutSessionPage() {
     setErroredSetIds((current) => new Set(current).add(setId))
   }
 
-  function setWeightMissing(setId: string, missing: boolean) {
-    setWeightMissingSetIds((current) => {
-      if (current.has(setId) === missing) return current
-      const next = new Set(current)
-      if (missing) next.add(setId)
+  function setWeightOverride(setId: string, override: WeightOverride | undefined) {
+    setWeightOverrides((current) => {
+      if (current.get(setId) === override) return current
+      const next = new Map(current)
+      if (override) next.set(setId, override)
       else next.delete(setId)
       return next
     })
@@ -466,8 +475,9 @@ export function WorkoutSessionPage() {
         tag: 'normal',
       },
       {
+        // An explicit 0 copied from the previous set is a real bodyweight 0.
         onSuccess: (created) => {
-          if (weight === null) setWeightMissing(created.id, true)
+          if (weight === 0) setWeightOverride(created.id, 'confirmed')
         },
       },
     )
@@ -475,16 +485,16 @@ export function WorkoutSessionPage() {
 
   function handleChangeWeight(setId: string, weight: number | null) {
     if (weight === null) {
-      setWeightMissing(setId, true)
+      setWeightOverride(setId, 'missing')
       return
     }
-    setWeightMissing(setId, false)
+    setWeightOverride(setId, weight === 0 ? 'confirmed' : undefined)
     updateSetMutation.mutate({ id: setId, patch: { weight } }, { onError: () => markError(setId) })
   }
 
   function handleCompleteSet(set: SetEntry) {
-    // Never silently save an unknown weight as 0 (see `weightMissingSetIds`).
-    if (weightMissingSetIds.has(set.id)) return
+    // Never silently save an unknown weight as 0 (see `isWeightMissing`).
+    if (isWeightMissing(set, weightOverrides.get(set.id))) return
     toggleCompletedMutation.mutate(
       { id: set.id, completed: true },
       {
@@ -492,6 +502,15 @@ export function WorkoutSessionPage() {
         onError: () => markError(set.id),
       },
     )
+
+    // Typing the weight once is enough: the next pending set of the same
+    // exercise that still has no weight inherits this one.
+    const siblings = exercises.find((exercise) => exercise.id === set.workout_exercise_id)?.set_entries ?? []
+    const next = siblings.find((sibling) => !sibling.completed && sibling.id !== set.id)
+    if (next && isWeightMissing(next, weightOverrides.get(next.id))) {
+      setWeightOverride(next.id, set.weight === 0 ? 'confirmed' : undefined)
+      if (next.weight !== set.weight) updateSetMutation.mutate({ id: next.id, patch: { weight: set.weight } })
+    }
   }
 
   function handleRetryComplete(set: SetEntry) {
@@ -580,7 +599,7 @@ export function WorkoutSessionPage() {
             planned={targetsByPosition.get(currentExercise.position)}
             skipped={skippedIds.has(currentExercise.id)}
             erroredSetIds={erroredSetIds}
-            weightMissingSetIds={weightMissingSetIds}
+            weightOverrides={weightOverrides}
             onToggleSkip={() => toggleSkip(currentExercise.id)}
             onOpenTagOverlay={setTagOverlaySet}
             onOpenPlateCalculator={setPlateCalculatorWeight}
